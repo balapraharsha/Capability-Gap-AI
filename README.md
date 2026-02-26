@@ -1,12 +1,3 @@
-Good.
-Private repo is fine for now. Just make sure you can share access with evaluators later.
-
-Here is a **clean, judge-friendly README.md** — professional, structured, not overhyped.
-
-You can paste this directly.
-
----
-
 # Capability Gap AI
 
 An intervention-first AI system designed to shift students from academic coding habits to industry-ready systemic reasoning through real-time Socratic intervention.
