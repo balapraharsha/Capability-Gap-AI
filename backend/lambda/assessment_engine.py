@@ -213,7 +213,8 @@ def process_answer(session_id: str, question_id: str, answer: str,
     }
 
     # ── MID-CHAIN (still inside Q1 arc) ──────────────────────────
-    if current_slot == 1 and chain and is_chain_active(session):
+    chain_already_done = chain_is_complete(chain) if chain else True
+    if current_slot == 1 and chain and is_chain_active(session) and not chain_already_done:
         result   = advance_chain(session=session, completed_step=completed_step)
         upd_chain = result["updatedChain"]
         chain_done = result["chainComplete"]

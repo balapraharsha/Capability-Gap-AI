@@ -303,12 +303,12 @@ export function ReportPage() {
               const cfg = SKILL_CONFIG[key];
               const pctVal = Math.round((rawNine[key] ?? 0.5) * 100);
               return (
-                <div key={key} className="flex items-start gap-3 bg-white rounded-lg border border-red-200 p-3">
-                  <div className={`flex-shrink-0 mt-0.5 ${cfg?.iconColor ?? 'text-slate-600'}`}>{cfg?.icon}</div>
+                <div key={key} className={`flex items-start gap-3 rounded-lg border p-3 ${cfg?.bg ?? 'bg-orange-50'} ${cfg?.border ?? 'border-orange-200'}`}>
+                  <div className={`flex-shrink-0 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center ${cfg?.iconBg ?? 'bg-orange-100'} ${cfg?.iconColor ?? 'text-orange-700'}`}>{cfg?.icon}</div>
                   <div>
                     <p className="text-[12px] font-semibold text-slate-800">{cfg?.label ?? key}</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">{cfg?.description ?? ''}</p>
-                    <p className="text-[11px] text-red-600 font-semibold mt-1">Score: {pctVal}%</p>
+                    <p className="text-[11px] text-orange-700 font-bold mt-1">Score: {pctVal}%</p>
                   </div>
                 </div>
               );

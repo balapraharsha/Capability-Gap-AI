@@ -285,7 +285,7 @@ export function AssessmentPage() {
         remainingCompetencies: res.remainingCompetencies ?? currentSession!.remainingCompetencies ?? [],
         confidenceScore: res.confidenceScore ?? currentSession!.confidenceScore ?? 0,
         coverage: res.coverage ?? currentSession!.coverage ?? 0,
-        questionCount: res.questionCount ?? (currentSession!.questionCount ?? 1) + 1,
+        questionCount: res.questionCount ?? currentSession!.questionCount ?? 1,
         status: res.status ?? currentSession!.status,
         scenarioChain: res.scenarioChain ?? currentSession!.scenarioChain,
         currentQuestion: res.nextQuestion ?? null,
