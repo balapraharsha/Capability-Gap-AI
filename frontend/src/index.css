@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-amber-50 text-slate-900 font-sans;
+}
+
+.glass-panel {
+  @apply bg-amber-50/90 border border-amber-200 shadow-lg shadow-amber-200/60 rounded-2xl backdrop-blur-md transition-transform transition-shadow duration-200;
+}
+
+.glass-panel:hover {
+  @apply -translate-y-0.5 shadow-xl;
+}
+
+.primary-btn {
+  @apply inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-amber-50 shadow-sm hover:bg-orange-500 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50 transition-all duration-200;
+}
+
+.secondary-btn {
+  @apply inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-amber-100 hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50 transition-all duration-200;
+}
+
+.question-card {
+  animation: fade-slide-in 260ms ease-out;
+}
+
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

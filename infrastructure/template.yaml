@@ -1,0 +1,154 @@
+Transform: AWS::Serverless-2016-10-31
+Description: Capability Gap AI - Adaptive AI Interview Simulator
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        USERS_TABLE: CapabilityGapAI-Users
+        ASSESSMENT_SESSIONS_TABLE: CapabilityGapAI-AssessmentSessions
+        ANSWERS_TABLE: CapabilityGapAI-Answers
+        REPORTS_TABLE: CapabilityGapAI-Reports
+        BEDROCK_MODEL_ID: anthropic.claude-v2
+
+Resources:
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'OPTIONS,GET,POST'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+
+  AssessmentEngineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: assessment_engine.handler
+      Events:
+        StartAssessment:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /assessment/start
+            Method: post
+        AnswerQuestion:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /assessment/{sessionId}/answer
+            Method: post
+
+  ReportGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: report_generator.handler
+      Events:
+        GetReport:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /assessment/{sessionId}/report
+            Method: get
+        ListAssessments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /users/{userId}/assessments
+            Method: get
+
+  TopicRetrieverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: topic_retriever.handler
+
+  QuestionSynthesizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: question_synthesizer.handler
+
+  CriticAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: critic_agent.handler
+
+  GuideAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/lambda
+      Handler: guide_agent.handler
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CapabilityGapAI-Users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  AssessmentSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CapabilityGapAI-AssessmentSessions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserSessionsIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  AnswersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CapabilityGapAI-Answers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: questionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+        - AttributeName: questionId
+          KeyType: RANGE
+
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CapabilityGapAI-Reports
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
