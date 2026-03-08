@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submitAnswer } from '../api';
 import { TimerBadge } from '../components/TimerBadge';
+import { TechnicalQuestionCard } from '../components/TechnicalQuestionCard';
 import {
   useAssessment,
   formatQuestionType,
@@ -10,12 +11,50 @@ import {
   formatLevel,
 } from '../context/AssessmentContext';
 import type { Question, ScenarioStep } from '../types';
+import { QUESTION_TYPE_META } from '../types';
 
 // ─────────────────────────────────────────────────
-// Sub-components
+// Question progress tracker (6 slots)
 // ─────────────────────────────────────────────────
 
-/** The vertical progressive arc shown on the left of the question card */
+const QUESTION_SLOTS = [
+  { icon: '🎯', label: 'Scenario Chain' },
+  { icon: '🐛', label: 'Debug' },
+  { icon: '🔧', label: 'Fix Code' },
+  { icon: '👁️', label: 'Code Review' },
+  { icon: '🔍', label: 'Log Detective' },
+  { icon: '⚡', label: 'Complexity' },
+];
+
+function QuestionProgressBar({ currentIndex }: { currentIndex: number }) {
+  return (
+    <div className="flex items-center gap-1 mb-4">
+      {QUESTION_SLOTS.map((slot, i) => (
+        <div key={i} className="flex flex-col items-center flex-1">
+          <div
+            className={`w-full h-1.5 rounded-full transition-all duration-500 ${
+              i < currentIndex
+                ? 'bg-green-400'
+                : i === currentIndex
+                  ? 'bg-amber-500'
+                  : 'bg-stone-200'
+            }`}
+          />
+          <span className={`mt-1 text-[8px] font-medium ${
+            i === currentIndex ? 'text-amber-600' : i < currentIndex ? 'text-green-600' : 'text-stone-400'
+          }`}>
+            {i < currentIndex ? '✓' : slot.icon}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// Scenario Arc sidebar (Q1 chain only)
+// ─────────────────────────────────────────────────
+
 function ScenarioArc({
   steps,
   rootScenario,
@@ -61,12 +100,9 @@ function ScenarioArc({
       <div className="relative">
         {nodes.map((node, i) => (
           <div key={i} className="flex items-start gap-3 relative">
-            {/* Connector line */}
             {i < nodes.length - 1 && (
               <div className="absolute left-[9px] top-5 w-px h-full bg-amber-200 z-0" />
             )}
-
-            {/* Dot */}
             <div
               className={`relative z-10 mt-0.5 flex-shrink-0 h-[18px] w-[18px] rounded-full border-2 flex items-center justify-center
                 ${node.active
@@ -85,8 +121,6 @@ function ScenarioArc({
                 <span className="block h-2 w-2 rounded-full bg-white" />
               )}
             </div>
-
-            {/* Text */}
             <div className={`pb-4 ${i === nodes.length - 1 ? 'pb-0' : ''}`}>
               <p className={`text-[11px] font-semibold leading-tight
                 ${node.active ? 'text-orange-600' : node.done ? 'text-slate-800' : 'text-stone-400'}`}>
@@ -104,7 +138,10 @@ function ScenarioArc({
   );
 }
 
-/** Animated complication reveal banner */
+// ─────────────────────────────────────────────────
+// Complication banner
+// ─────────────────────────────────────────────────
+
 function ComplicationBanner({ text, onContinue }: { text: string; onContinue: () => void }) {
   return (
     <div className="glass-panel border-amber-500 bg-amber-50/95 p-5 space-y-3 animate-fade-slide-in">
@@ -115,18 +152,17 @@ function ComplicationBanner({ text, onContinue }: { text: string; onContinue: ()
         </p>
       </div>
       <p className="text-sm text-slate-900 leading-relaxed">{text}</p>
-      <button
-        type="button"
-        onClick={onContinue}
-        className="primary-btn text-xs py-1.5 px-4"
-      >
+      <button type="button" onClick={onContinue} className="primary-btn text-xs py-1.5 px-4">
         Continue →
       </button>
     </div>
   );
 }
 
-/** AI evaluation panel shown after each answer */
+// ─────────────────────────────────────────────────
+// AI evaluation panel
+// ─────────────────────────────────────────────────
+
 function EvaluationPanel({
   observerSummary,
   criticFeedback,
@@ -160,13 +196,35 @@ function EvaluationPanel({
 }
 
 // ─────────────────────────────────────────────────
+// Question type transition card (shown between questions)
+// ─────────────────────────────────────────────────
+
+function QuestionTypeTransition({ type }: { type: string }) {
+  const meta = QUESTION_TYPE_META[type] ?? { label: type, icon: '💡', description: '' };
+  return (
+    <div className="glass-panel p-6 text-center space-y-2 animate-fade-slide-in">
+      <span className="text-4xl">{meta.icon}</span>
+      <p className="text-lg font-bold text-slate-900">{meta.label}</p>
+      <p className="text-sm text-slate-500">{meta.description}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// Technical question types (non-scenario)
+// ─────────────────────────────────────────────────
+
+const TECHNICAL_TYPES = new Set(['debugging', 'fix_the_code', 'code_review', 'log_detective', 'complexity']);
+
+function isTechnicalQuestion(type: string) {
+  return TECHNICAL_TYPES.has(type);
+}
+
+// ─────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────
 
-type PagePhase =
-  | 'question'          // Showing the current MCQ
-  | 'evaluation'        // Showing AI feedback + complication banner
-  | 'complication';     // Complication revealed, waiting for user to continue
+type PagePhase = 'question' | 'evaluation' | 'complication';
 
 export function AssessmentPage() {
   const {
@@ -181,21 +239,19 @@ export function AssessmentPage() {
 
   const navigate = useNavigate();
   const [selectedOption, setSelectedOption] = useState('');
+  const [editedCode, setEditedCode] = useState<string | null>(null);
   const [questionStartedAt, setQuestionStartedAt] = useState<string>(new Date().toISOString());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<PagePhase>('question');
+  const [showTransition, setShowTransition] = useState(false);
 
-  // Complication data received from the API
   const [pendingComplication, setPendingComplication] = useState<string | null>(null);
   const [pendingNextQuestion, setPendingNextQuestion] = useState<Question | null>(null);
-
-  // Accumulated chain steps for the arc display
   const [arcSteps, setArcSteps] = useState<ScenarioStep[]>([]);
 
   const topRef = useRef<HTMLDivElement>(null);
 
-  // ── Guards ──────────────────────────────────────
   useEffect(() => {
     if (!currentSession) navigate('/roles');
   }, [currentSession, navigate]);
@@ -204,6 +260,7 @@ export function AssessmentPage() {
     if (currentQuestion) {
       setQuestionStartedAt(new Date().toISOString());
       setSelectedOption('');
+      setEditedCode(null);
       setError(null);
     }
   }, [currentQuestion?.questionId]);
@@ -211,16 +268,26 @@ export function AssessmentPage() {
   if (!currentSession) return null;
 
   const q = currentQuestion as Question;
-  const chain = currentSession.scenarioChain;
   const currentChainStep = q?.chainStep ?? null;
-  // Only show arc sidebar when the CURRENT question is part of the chain
   const isInChain = currentChainStep !== null && currentChainStep !== undefined;
+  const chain = currentSession.scenarioChain;
+  const isTechnical = q ? isTechnicalQuestion(q.type) : false;
 
-  // ── Submit answer ────────────────────────────────
+  // 0-based slot index for the progress bar
+  const slotIndex = Math.max(0, (currentSession.questionCount ?? 1) - 1);
+
+  // ── Submit answer ──────────────────────────────
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!selectedOption) {
-      setError('Please choose an option before continuing.');
+
+    // For fix_the_code: require explanation text; code change is optional
+    const answerValue = isTechnical && q.type === 'fix_the_code'
+      ? `${selectedOption}\n\n[Fixed code]:\n${editedCode ?? q.code ?? ''}`
+      : selectedOption;
+
+    if (!answerValue.trim()) {
+      setError('Please provide an answer before continuing.');
       return;
     }
 
@@ -231,22 +298,21 @@ export function AssessmentPage() {
       const res = await submitAnswer({
         sessionId: currentSession!.sessionId,
         questionId: q.questionId,
-        answer: selectedOption,
+        answer: answerValue,
         startedAtIso: questionStartedAt,
         endedAtIso: new Date().toISOString(),
       });
 
-      // Store evaluation for the panel
       setLastEvaluation(res.evaluation);
 
-      // Only add to arc for chain questions (chainStep 0 or 1), not normal questions
+      // Accumulate arc steps for Q1 chain
       if (currentChainStep !== null && currentChainStep !== undefined) {
         const newStep: ScenarioStep = {
           stepIndex: currentChainStep,
           type: currentChainStep === 0 ? 'initial' : 'follow_up',
           questionId: q.questionId,
-          questionText: `${q.scenario}\n${q.question}`,
-          candidateAnswer: selectedOption,
+          questionText: `${q.scenario}\n${q.question ?? ''}`,
+          candidateAnswer: answerValue,
           complicationText: q.complicationText ?? null,
           criticScore: 0,
           observerSummary: res.evaluation?.observerSummary ?? '',
@@ -254,14 +320,13 @@ export function AssessmentPage() {
         setArcSteps((prev) => [...prev, newStep]);
       }
 
-      // Update session state
       const updatedSession = {
         ...currentSession!,
         testedCompetencies: res.testedCompetencies ?? currentSession!.testedCompetencies ?? [],
         remainingCompetencies: res.remainingCompetencies ?? currentSession!.remainingCompetencies ?? [],
         confidenceScore: res.confidenceScore ?? currentSession!.confidenceScore ?? 0,
         coverage: res.coverage ?? currentSession!.coverage ?? 0,
-        questionCount: (currentSession!.questionCount ?? 1) + 1,
+        questionCount: res.questionCount ?? (currentSession!.questionCount ?? 1) + 1,
         status: res.status ?? currentSession!.status,
         scenarioChain: res.scenarioChain ?? currentSession!.scenarioChain,
         currentQuestion: res.nextQuestion ?? null,
@@ -269,14 +334,12 @@ export function AssessmentPage() {
 
       setSession(updatedSession);
 
-      // Assessment finished
       if (res.status === 'completed') {
         if (res.report) setReport(res.report);
         navigate('/report');
         return;
       }
 
-      // Complication incoming — stash next question and show banner after eval
       if (res.complicationText) {
         setPendingComplication(res.complicationText);
         setPendingNextQuestion(res.nextQuestion);
@@ -285,7 +348,13 @@ export function AssessmentPage() {
         return;
       }
 
-      // Normal next question
+      // Show brief transition card when switching from chain → technical
+      const nextType = res.nextQuestion?.type;
+      if (nextType && isTechnicalQuestion(nextType) && !isTechnical) {
+        setShowTransition(true);
+        setTimeout(() => setShowTransition(false), 1800);
+      }
+
       setCurrentQuestion(res.nextQuestion ?? null);
       setPhase('question');
       topRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -298,7 +367,6 @@ export function AssessmentPage() {
     }
   }
 
-  // After user reads evaluation + complication, advance to next question
   function handleContinueAfterComplication() {
     setCurrentQuestion(pendingNextQuestion);
     setPendingComplication(null);
@@ -307,7 +375,6 @@ export function AssessmentPage() {
     topRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
 
-  // ── No question state ────────────────────────────
   if (!currentQuestion && !lastEvaluation) {
     return (
       <div className="glass-panel p-6 text-center text-sm text-slate-300">
@@ -319,7 +386,8 @@ export function AssessmentPage() {
     );
   }
 
-  // ── Render ───────────────────────────────────────
+  // ── Render ─────────────────────────────────────
+
   return (
     <div className="space-y-4" ref={topRef}>
 
@@ -327,13 +395,16 @@ export function AssessmentPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-black">
-            Question {currentSession.questionCount} · {formatRole(currentSession.role)} ·{' '}
+            Question {currentSession.questionCount} of 6 · {formatRole(currentSession.role)} ·{' '}
             {formatLevel(currentSession.level)}
           </h2>
           <p className="text-xs text-slate-700">
-            {formatQuestionType(q?.type || 'technical_reasoning')} · Evaluating{' '}
-            {formatCompetency(q?.competency || '')}
-            {currentChainStep !== null && currentChainStep !== undefined && (
+            {q && isTechnical
+              ? (QUESTION_TYPE_META[q.type]?.label ?? formatQuestionType(q.type))
+              : formatQuestionType(q?.type || 'technical_reasoning')
+            }
+            {' · '}Evaluating {formatCompetency(q?.competency || '')}
+            {isInChain && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                 ⚡ Scenario Arc · Step {(currentChainStep ?? 0) + 1}
               </span>
@@ -343,7 +414,15 @@ export function AssessmentPage() {
         {phase === 'question' && <TimerBadge startedAt={questionStartedAt} />}
       </div>
 
-      {/* Two-column layout when chain is active */}
+      {/* 6-slot progress bar */}
+      <QuestionProgressBar currentIndex={slotIndex} />
+
+      {/* Transition card */}
+      {showTransition && q && (
+        <QuestionTypeTransition type={q.type} />
+      )}
+
+      {/* Two-column layout for chain arc */}
       <div className={isInChain && arcSteps.length > 0 ? 'grid gap-4 md:grid-cols-[220px_1fr]' : ''}>
 
         {/* Arc sidebar */}
@@ -360,7 +439,7 @@ export function AssessmentPage() {
 
         <div className="space-y-4 min-w-0">
 
-          {/* Evaluation panel (shown after answering) */}
+          {/* Evaluation panel */}
           {phase === 'evaluation' && lastEvaluation && (
             <EvaluationPanel
               observerSummary={lastEvaluation.observerSummary}
@@ -377,7 +456,7 @@ export function AssessmentPage() {
             />
           )}
 
-          {/* Previous evaluation (inline, smaller) when in question phase */}
+          {/* Previous evaluation (collapsed) */}
           {phase === 'question' && lastEvaluation && arcSteps.length > 0 && (
             <details className="glass-panel p-4 text-xs cursor-pointer">
               <summary className="font-semibold text-orange-700 uppercase tracking-wider text-[10px]">
@@ -400,10 +479,11 @@ export function AssessmentPage() {
             </details>
           )}
 
-          {/* Question card — only shown during question phase */}
+          {/* Question content */}
           {phase === 'question' && q && (
-            <>
-              {/* Complication text on the question card itself (for context) */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+
+              {/* Complication context chip */}
               {q.complicationText && (
                 <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-xs text-slate-800 leading-relaxed">
                   <span className="font-semibold text-amber-700 mr-1">⚡ Update:</span>
@@ -411,77 +491,94 @@ export function AssessmentPage() {
                 </div>
               )}
 
-              <div className="glass-panel question-card p-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">
-                  Scenario
-                </p>
-                <p className="text-sm text-slate-900">{q.scenario}</p>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-stone-700">
-                  Question
-                </p>
-                <p className="text-base font-semibold text-black">{q.question}</p>
-                {q.difficulty === 'hard' && (
-                  <span className="mt-2 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                    High pressure
-                  </span>
-                )}
+              {/* ── TECHNICAL question (Q2-Q6) ── */}
+              {isTechnical ? (
+                <div className="glass-panel p-5">
+                  <TechnicalQuestionCard
+                    question={q}
+                    selectedOption={selectedOption}
+                    onOptionSelect={setSelectedOption}
+                    onCodeChange={setEditedCode}
+                    submitting={submitting}
+                  />
+                </div>
+              ) : (
+                /* ── SCENARIO question (Q1 chain) ── */
+                <>
+                  <div className="glass-panel question-card p-5">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">
+                      Scenario
+                    </p>
+                    <p className="text-sm text-slate-900">{q.scenario}</p>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-stone-700">
+                      Question
+                    </p>
+                    <p className="text-base font-semibold text-black">{q.question}</p>
+                    {q.difficulty === 'hard' && (
+                      <span className="mt-2 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                        High pressure
+                      </span>
+                    )}
+                  </div>
+
+                  <fieldset className="space-y-2">
+                    <legend className="mb-1 text-xs font-semibold text-stone-800">
+                      Choose the option that best reflects what you would do first.
+                    </legend>
+                    <div className="space-y-2">
+                      {q.options?.map((opt) => (
+                        <label
+                          key={opt}
+                          className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2 text-xs shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                            selectedOption === opt
+                              ? 'border-amber-500 bg-amber-100/70'
+                              : 'border-stone-300 bg-white hover:border-amber-400'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            className="mt-0.5 h-3.5 w-3.5 text-amber-600 focus:ring-amber-500"
+                            name="decision"
+                            value={opt}
+                            checked={selectedOption === opt}
+                            onChange={() => setSelectedOption(opt)}
+                            disabled={submitting}
+                          />
+                          <span className="text-slate-900">{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                </>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs text-red-700">
+                  {error}
+                </div>
+              )}
+
+              {/* Footer: progress + submit */}
+              <div className="space-y-2">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
+                  <div
+                    className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                    style={{ width: `${Math.round(((currentSession.questionCount ?? 1) / 6) * 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-stone-700">
+                    Question {currentSession.questionCount} of 6 · Confidence:{' '}
+                    {Math.round((currentSession.confidenceScore ?? 0) * 100)}%
+                  </p>
+                  <button type="submit" className="primary-btn" disabled={submitting}>
+                    {submitting ? 'Analysing…' : 'Submit'}
+                  </button>
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <fieldset className="space-y-2">
-                  <legend className="mb-1 text-xs font-semibold text-stone-800">
-                    Choose the option that best reflects what you would do first.
-                  </legend>
-                  <div className="space-y-2">
-                    {q.options?.map((opt) => (
-                      <label
-                        key={opt}
-                        className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2 text-xs shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                          selectedOption === opt
-                            ? 'border-amber-500 bg-amber-100/70'
-                            : 'border-stone-300 bg-white hover:border-amber-400'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          className="mt-0.5 h-3.5 w-3.5 text-amber-600 focus:ring-amber-500"
-                          name="decision"
-                          value={opt}
-                          checked={selectedOption === opt}
-                          onChange={() => setSelectedOption(opt)}
-                          disabled={submitting}
-                        />
-                        <span className="text-slate-900">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-
-                {error && (
-                  <div className="rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs text-red-700">
-                    {error}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-100">
-                    <div
-                      className="h-full rounded-full bg-amber-500 transition-all duration-300"
-                      style={{ width: `${Math.round((currentSession.coverage ?? 0) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-stone-700">
-                      Coverage: {Math.round((currentSession.coverage ?? 0) * 100)}% · Confidence:{' '}
-                      {Math.round((currentSession.confidenceScore ?? 0) * 100)}%
-                    </p>
-                    <button type="submit" className="primary-btn" disabled={submitting}>
-                      {submitting ? 'Analyzing decision…' : 'Submit decision'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </>
+            </form>
           )}
 
         </div>

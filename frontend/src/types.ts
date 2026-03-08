@@ -12,8 +12,7 @@ export type Role =
   | 'fullstack-developer'
   | 'big-data-engineer'
   | 'iot-architect'
-  | 'blockchain-developer'
-  | 'cloud-engineer';
+  | 'blockchain-developer';
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'senior';
 
@@ -24,7 +23,12 @@ export type QuestionType =
   | 'situation'
   | 'communication_task'
   | 'leadership_scenario'
-  | 'technical_reasoning';
+  | 'technical_reasoning'
+  | 'debugging'
+  | 'fix_the_code'
+  | 'code_review'
+  | 'log_detective'
+  | 'complexity';
 
 export interface Question {
   questionId: string;
@@ -32,12 +36,20 @@ export interface Question {
   type: QuestionType;
   competency: string;
   scenario: string;
-  question: string;
-  options: string[];
+  question?: string;
+  task?: string;
+  options?: string[];
   difficulty?: 'easy' | 'medium' | 'hard';
   order: number;
   chainStep?: number | null;
   complicationText?: string | null;
+  language?: string;
+  code?: string;
+  diff?: string;
+  logs?: string;
+  hint?: string;
+  fix?: string;
+  expected_issue?: string;
 }
 
 export interface ScenarioStep {
@@ -58,7 +70,6 @@ export interface ScenarioChain {
   chainDepth: number;
   isActive: boolean;
   lastComplication?: string | null;
-  /** Which question number (1-indexed) this chain belongs to */
   questionNumber?: number;
 }
 
@@ -75,6 +86,7 @@ export interface AssessmentSession {
   confidenceScore: number;
   coverage: number;
   questionCount: number;
+  answeredCount?: number;
   createdAt?: string;
   completedAt?: string;
   scenarioChain?: ScenarioChain | null;
@@ -89,7 +101,7 @@ export interface EvaluationFeedback {
 }
 
 export interface AnswerResponse {
-  sessionId: string;
+  sessionId?: string;
   status: 'in-progress' | 'completed';
   evaluation: EvaluationFeedback;
   nextQuestion: Question | null;
@@ -97,10 +109,22 @@ export interface AnswerResponse {
   remainingCompetencies: string[];
   confidenceScore: number;
   coverage: number;
+  questionCount?: number;
   report?: CapabilityReport;
   complicationText?: string | null;
   chainStep?: number | null;
   scenarioChain?: ScenarioChain | null;
+}
+
+export interface SkillDimension {
+  score: number;
+  pct: number;
+  label: string;
+  description: string;
+  performanceLabel: string;
+  performanceDesc: string;
+  isWeak: boolean;
+  isStrong: boolean;
 }
 
 export interface CapabilityReport {
@@ -108,14 +132,27 @@ export interface CapabilityReport {
   role: Role;
   level: ExperienceLevel;
   overallReadiness: number;
+  narrativeSummary?: string;
+  // 9-skill breakdown
+  nineSkills: Record<string, SkillDimension>;
+  nineSkillScores: Record<string, number>;
+  weakSkills: string[];
+  strongSkills: string[];
+  // Legacy
   competencyScores: Record<string, number>;
   strengths: string[];
   weaknesses: string[];
   weakAreas?: string[];
-  timeAnalysis?: {
-    averageResponseTimeMinutes: number;
-  };
+  timeAnalysis?: { averageResponseTimeMinutes: number };
   learningRecommendations: string[];
   recommendedLearning?: string[];
-  suggestedPracticeTopics?: string[];
 }
+
+export const QUESTION_TYPE_META: Record<string, { label: string; description: string }> = {
+  scenario_mcq:   { label: 'Scenario Decision',      description: 'Real workplace scenario with decision trade-offs' },
+  debugging:      { label: 'Debug the Code',          description: 'Identify the bug in a code snippet' },
+  fix_the_code:   { label: 'Fix the Code',            description: 'Edit and correct broken code' },
+  code_review:    { label: 'Code Review',             description: 'Review a PR diff and leave feedback' },
+  log_detective:  { label: 'Log Detective',           description: 'Diagnose root cause from logs and stack traces' },
+  complexity:     { label: 'Complexity Analysis',     description: 'Analyse Big-O and suggest optimisation' },
+};

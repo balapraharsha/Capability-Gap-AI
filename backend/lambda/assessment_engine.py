@@ -1,10 +1,14 @@
 """
-Assessment Engine – Adaptive AI Interview Simulator  v2
--------------------------------------------------------
-Q1 and Q2 each run a full 3-decision chain:
-  D1 → Complication → D2 → Complication → Final Decision
-
-Q3-Q6 are normal standalone competency questions.
+Assessment Engine v3
+---------------------
+Fixed question flow:
+  Q1  → Scenario chain (D1 → Complication → D2 → Complication → Final Decision)
+  Q2  → Debugging      (spot the bug)
+  Q3  → Fix-the-code   (edit broken code)
+  Q4  → Code Review    (PR diff feedback)
+  Q5  → Log Detective  (stack trace diagnosis)
+  Q6  → Complexity     (Big-O analysis)
+  → Report
 """
 
 import json
@@ -14,19 +18,11 @@ from decimal import Decimal
 from typing import Any, Dict, List
 
 from common import (
-    _iso_now,
-    build_response,
-    decimal_to_native,
-    generate_question_id,
-    generate_session_id,
-    get_table,
-    parse_body,
+    _iso_now, build_response, decimal_to_native,
+    generate_question_id, generate_session_id, get_table, parse_body,
 )
 from competency_tracker import (
-    get_next_competency,
-    init_tracker,
-    should_continue,
-    update as tracker_update,
+    get_next_competency, init_tracker, should_continue, update as tracker_update,
 )
 from question_synthesizer import synthesize_next_question
 from observer_agent import run_observer
@@ -34,13 +30,14 @@ from critic_agent import run_critic
 from guide_agent import run_guide
 from report_generator import generate_report_for_session
 from scenario_chain_synthesizer import (
-    advance_chain,
-    chain_is_complete,
-    init_chain,
-    is_chain_active,
-    should_start_chain,
-    CHAINED_QUESTION_NUMBERS,
+    advance_chain, chain_is_complete, init_chain, is_chain_active,
 )
+from technical_question_synthesizer import (
+    synthesize_technical_question, is_technical_question_slot,
+)
+
+# Total number of questions in an assessment
+TOTAL_QUESTIONS = 6
 
 
 # ------------------------------------------------------------------
@@ -77,20 +74,19 @@ def start_assessment(user_id: str, role: str, level: str):
     tracker = init_tracker(role)
     next_comp = get_next_competency(tracker)
 
+    # Q1 is always a scenario chain question
     question = synthesize_next_question(
         role=role, level=level,
         target_competency=next_comp,
         remaining_competencies=tracker["remaining"],
         previous_answers=[],
     )
-
     question_id = question.get("id") or generate_question_id()
     question["questionId"] = question_id
     question["order"] = 0
-    question["chainStep"] = 0        # Q1 is always step 0 of its chain
+    question["chainStep"] = 0
     question["complicationText"] = None
 
-    # Q1 always starts with a chain
     scenario_chain = init_chain(
         root_scenario=question.get("scenario", ""),
         competency=next_comp,
@@ -108,8 +104,8 @@ def start_assessment(user_id: str, role: str, level: str):
         "confidenceScore": tracker["confidence"],
         "coverage": tracker["coverage"],
         "currentQuestion": question,
-        "questionCount": 1,
-        "completedChainQuestions": 0,   # how many chained questions fully finished
+        "questionCount": 1,           # current display number (1-6)
+        "answeredCount": 0,            # how many top-level questions answered
         "scenarioChain": scenario_chain,
         "createdAt": _iso_now(),
     })
@@ -146,17 +142,25 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
     if current_q.get("questionId") != question_id:
         return {"error": "Question mismatch", "statusCode": 400}
 
-    # Build question text
+    # Build question text for AI agents
     scenario = current_q.get("scenario", "")
-    question = current_q.get("question", "")
-    options = current_q.get("options", [])
-    question_text = f"{scenario}\n{question}\nOptions: {options}"
+    question_text_parts = [scenario, current_q.get("question", ""), current_q.get("task", "")]
+    if current_q.get("code"):
+        question_text_parts.append(f"Code:\n{current_q['code']}")
+    if current_q.get("logs"):
+        question_text_parts.append(f"Logs:\n{current_q['logs']}")
+    if current_q.get("diff"):
+        question_text_parts.append(f"Diff:\n{current_q['diff']}")
+    question_text = "\n".join(p for p in question_text_parts if p)
+
     competency = current_q.get("competency", "problem_solving")
 
     start_ts = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
     end_ts = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
     response_time_sec = max(1.0, (end_ts - start_ts).total_seconds())
 
+    # Resolve selected text
+    options = current_q.get("options", [])
     selected_text = answer
     if options and answer:
         if len(answer) == 1 and answer.upper() in ["A", "B", "C", "D"]:
@@ -198,11 +202,11 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
         "confidence": float(session.get("confidenceScore", 0)),
     }
     tracker = tracker_update(tracker, competency, competency_score)
-    question_count = len(tracker["tested"])
 
     current_chain_step = current_q.get("chainStep")
     chain = session.get("scenarioChain")
-    completed_chain_questions = int(session.get("completedChainQuestions", 0))
+    answered_count = int(session.get("answeredCount", 0))
+    question_count = int(session.get("questionCount", 1))
 
     evaluation = {
         "observerSummary": observer.get("summary"),
@@ -210,7 +214,6 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
         "guidePrompt": guide.get("prompt"),
     }
 
-    # Build completed step record
     completed_step = {
         "stepIndex": current_chain_step if current_chain_step is not None else 0,
         "type": "initial" if current_chain_step == 0 else "follow_up",
@@ -223,7 +226,7 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
     }
 
     # --------------------------------------------------
-    # CHAIN LOGIC — are we mid-chain?
+    # CHAIN LOGIC — mid-chain for Q1
     # --------------------------------------------------
     if chain and is_chain_active(session):
         print(f"DEBUG chain active: depth={chain.get('chainDepth')}, step={current_chain_step}")
@@ -233,7 +236,6 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
         chain_complete = chain_result["chainComplete"]
 
         if not chain_complete:
-            # More steps remain in this chain
             next_q = chain_result["nextQuestion"]
             complication_text = chain_result["complicationText"]
 
@@ -241,13 +243,12 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
                 Key={"sessionId": session_id},
                 UpdateExpression=(
                     "SET testedCompetencies=:t, remainingCompetencies=:r, "
-                    "currentQuestion=:q, questionCount=:c, scenarioChain=:sc"
+                    "currentQuestion=:q, scenarioChain=:sc"
                 ),
                 ExpressionAttributeValues={
                     ":t": tracker["tested"],
                     ":r": tracker["remaining"],
                     ":q": convert_floats(next_q),
-                    ":c": question_count,
                     ":sc": convert_floats(updated_chain),
                 },
             )
@@ -262,21 +263,26 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
                 "remainingCompetencies": tracker["remaining"],
                 "confidenceScore": tracker["confidence"],
                 "coverage": tracker["coverage"],
+                "questionCount": question_count,
                 "evaluation": evaluation,
             }
 
-        # Chain finished — fall through to start next question or new chain
-        completed_chain_questions += 1
-        print(f"DEBUG chain complete. completedChainQuestions={completed_chain_questions}")
+        # Chain finished — Q1 complete, move to Q2
+        answered_count = 1
+        print(f"DEBUG chain complete. Moving to Q2 (debugging).")
+
+    else:
+        # Completed a standalone technical question
+        answered_count += 1
+        print(f"DEBUG answered_count now {answered_count}")
 
     # --------------------------------------------------
-    # BETWEEN CHAINS OR NORMAL FLOW
+    # DETERMINE NEXT QUESTION
     # --------------------------------------------------
-    continue_flag = should_continue(tracker, question_count)
-    print(f"DEBUG should_continue={continue_flag}")
+    next_question_number = answered_count + 1  # 1-indexed
 
-    if not continue_flag:
-        # Assessment complete
+    # Assessment complete after Q6
+    if next_question_number > TOTAL_QUESTIONS:
         report = generate_report_for_session(session_id)
         sessions_table.update_item(
             Key={"sessionId": session_id},
@@ -292,61 +298,62 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
             "remainingCompetencies": tracker["remaining"],
             "confidenceScore": tracker["confidence"],
             "coverage": tracker["coverage"],
+            "questionCount": question_count,
             "evaluation": evaluation,
             "report": report,
         }
 
-    # Get next competency question
-    next_comp = get_next_competency(tracker)
-    prev_answers = load_prev_answers(answers_table, session_id)
+    # Build progress for coverage bar (out of 6 questions)
+    progress = answered_count / TOTAL_QUESTIONS
+    tracker["coverage"] = progress
+    tracker["confidence"] = min(1.0, progress + 0.1)
 
-    next_q = synthesize_next_question(
-        role=session["role"],
-        level=session["level"],
-        target_competency=next_comp,
-        remaining_competencies=tracker["remaining"],
-        previous_answers=prev_answers,
-    )
-
-    qid = next_q.get("id") or generate_question_id()
-    next_q["questionId"] = qid
-    next_q["order"] = question_count - 1
-
-    # Determine if the NEXT question should start a new chain
-    next_question_number = completed_chain_questions + 1
-    new_chain = None
-
-    if next_question_number in CHAINED_QUESTION_NUMBERS:
-        # Start a fresh chain for this question
-        next_q["chainStep"] = 0
-        next_q["complicationText"] = None
-        new_chain = init_chain(
-            root_scenario=next_q.get("scenario", ""),
-            competency=next_comp,
+    # Generate next question
+    if is_technical_question_slot(next_question_number):
+        # Q2-Q6: technical question
+        prev_topics = [session.get("role", "")]
+        next_q = synthesize_technical_question(
             question_number=next_question_number,
+            role=session["role"],
+            level=session["level"],
+            previous_topics=prev_topics,
         )
-        print(f"DEBUG starting new chain for question_number={next_question_number}")
+        new_chain = {**(chain or {}), "isActive": False}
+        print(f"DEBUG generating technical Q{next_question_number}: {next_q.get('type')}")
     else:
-        # Normal standalone question
+        # Fallback: scenario question
+        next_comp = get_next_competency(tracker)
+        prev_answers = load_prev_answers(answers_table, session_id)
+        next_q = synthesize_next_question(
+            role=session["role"], level=session["level"],
+            target_competency=next_comp,
+            remaining_competencies=tracker["remaining"],
+            previous_answers=prev_answers,
+        )
+        qid = next_q.get("id") or generate_question_id()
+        next_q["questionId"] = qid
         next_q["chainStep"] = None
         next_q["complicationText"] = None
         new_chain = {**(chain or {}), "isActive": False}
 
-    update_expr = (
-        "SET testedCompetencies=:t, remainingCompetencies=:r, "
-        "currentQuestion=:q, questionCount=:c, "
-        "completedChainQuestions=:cq, scenarioChain=:sc"
-    )
+    next_q["order"] = next_question_number - 1
+
     sessions_table.update_item(
         Key={"sessionId": session_id},
-        UpdateExpression=update_expr,
+        UpdateExpression=(
+            "SET testedCompetencies=:t, remainingCompetencies=:r, "
+            "currentQuestion=:q, questionCount=:c, answeredCount=:ac, "
+            "scenarioChain=:sc, coverage=:cov, confidenceScore=:conf"
+        ),
         ExpressionAttributeValues={
             ":t": tracker["tested"],
             ":r": tracker["remaining"],
             ":q": convert_floats(next_q),
-            ":c": question_count,
-            ":cq": completed_chain_questions,
+            ":c": next_question_number,
+            ":ac": answered_count,
             ":sc": convert_floats(new_chain),
+            ":cov": convert_floats(tracker["coverage"]),
+            ":conf": convert_floats(tracker["confidence"]),
         },
     )
 
@@ -360,6 +367,7 @@ def process_answer(session_id, question_id, answer, started_at, ended_at):
         "remainingCompetencies": tracker["remaining"],
         "confidenceScore": tracker["confidence"],
         "coverage": tracker["coverage"],
+        "questionCount": next_question_number,
         "evaluation": evaluation,
     }
 
