@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { startAssessment } from '../api';
-import { useAssessment, formatRole, formatLevel } from '../../../../v2_all_changes/frontend/src/context/AssessmentContext';
+import { useAssessment, formatRole, formatLevel } from '../context/AssessmentContext';
 import type { ExperienceLevel, Role } from '../types';
 
 const ROLE_CATEGORIES = [
