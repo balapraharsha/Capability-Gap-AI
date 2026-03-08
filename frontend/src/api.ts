@@ -21,10 +21,9 @@ export async function submitAnswer(params: {
   endedAtIso: string;
 }): Promise<AnswerResponse> {
   const { sessionId, ...bodyData } = params;
-
   const res = await axios.post(
     `${API_BASE_URL}/assessment/${sessionId}/answer`,
-    bodyData // This now contains questionId, answer, etc.
+    bodyData
   );
   return res.data;
 }

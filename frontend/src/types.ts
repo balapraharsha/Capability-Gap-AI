@@ -27,6 +27,32 @@ export interface Question {
   options: string[];
   difficulty?: 'easy' | 'medium' | 'hard';
   order: number;
+  /** Which step in the progressive scenario chain (0 = initial, 1 = follow-up, null = standalone) */
+  chainStep?: number | null;
+  /** The complication twist text shown to the user before this question */
+  complicationText?: string | null;
+}
+
+/** One completed step in a scenario chain, stored on the session */
+export interface ScenarioStep {
+  stepIndex: number;
+  type: 'initial' | 'complication' | 'follow_up';
+  questionId: string;
+  questionText: string;
+  candidateAnswer: string;
+  complicationText?: string | null;
+  criticScore: number;
+  observerSummary: string;
+}
+
+/** The full chain state stored on the session */
+export interface ScenarioChain {
+  rootScenario: string;
+  chainCompetency: string;
+  steps: ScenarioStep[];
+  chainDepth: number;
+  isActive: boolean;
+  lastComplication?: string | null;
 }
 
 export interface AssessmentSession {
@@ -44,6 +70,7 @@ export interface AssessmentSession {
   questionCount: number;
   createdAt?: string;
   completedAt?: string;
+  scenarioChain?: ScenarioChain | null;
 }
 
 export interface EvaluationFeedback {
@@ -64,6 +91,11 @@ export interface AnswerResponse {
   confidenceScore: number;
   coverage: number;
   report?: CapabilityReport;
+  /** Complication twist narrative, present when a chain step was just triggered */
+  complicationText?: string | null;
+  /** Which chain step the NEXT question is at */
+  chainStep?: number | null;
+  scenarioChain?: ScenarioChain | null;
 }
 
 export interface CapabilityReport {
