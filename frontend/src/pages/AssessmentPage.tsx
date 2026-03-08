@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { submitAnswer } from '../../../../progressive_scenario_changes/frontend/src/api';
+import { submitAnswer } from '../api';
 import { TimerBadge } from '../components/TimerBadge';
 import {
   useAssessment,
@@ -9,7 +9,7 @@ import {
   formatRole,
   formatLevel,
 } from '../context/AssessmentContext';
-import type { Question, ScenarioStep } from '../../../../progressive_scenario_changes/frontend/src/types';
+import type { Question, ScenarioStep } from '../types';
 
 // ─────────────────────────────────────────────────
 // Sub-components
