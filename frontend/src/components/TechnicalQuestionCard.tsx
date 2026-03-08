@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Question } from '../../../../v3_technical_questions/frontend/src/types';
-import { QUESTION_TYPE_META } from '../../../../v3_technical_questions/frontend/src/types';
+import type { Question } from '../types';
+import { QUESTION_TYPE_META } from '../types';
 
 // ── Code block with syntax highlighting styling ──────────────────
 function CodeBlock({ code, language }: { code: string; language?: string }) {
