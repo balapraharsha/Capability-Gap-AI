@@ -212,7 +212,8 @@ export function AssessmentPage() {
 
   const q = currentQuestion as Question;
   const chain = currentSession.scenarioChain;
-  const isInChain = !!(chain && (chain.isActive || (chain.chainDepth ?? 0) > 0));
+  // Only show arc sidebar when the CURRENT question is part of the chain
+  const isInChain = currentChainStep !== null && currentChainStep !== undefined;
   const currentChainStep = q?.chainStep ?? null;
 
   // ── Submit answer ────────────────────────────────
@@ -238,18 +239,20 @@ export function AssessmentPage() {
       // Store evaluation for the panel
       setLastEvaluation(res.evaluation);
 
-      // Build step record for arc
-      const newStep: ScenarioStep = {
-        stepIndex: currentChainStep ?? arcSteps.length,
-        type: currentChainStep === 0 ? 'initial' : 'follow_up',
-        questionId: q.questionId,
-        questionText: `${q.scenario}\n${q.question}`,
-        candidateAnswer: selectedOption,
-        complicationText: q.complicationText ?? null,
-        criticScore: 0,
-        observerSummary: res.evaluation?.observerSummary ?? '',
-      };
-      setArcSteps((prev) => [...prev, newStep]);
+      // Only add to arc for chain questions (chainStep 0 or 1), not normal questions
+      if (currentChainStep !== null && currentChainStep !== undefined) {
+        const newStep: ScenarioStep = {
+          stepIndex: currentChainStep,
+          type: currentChainStep === 0 ? 'initial' : 'follow_up',
+          questionId: q.questionId,
+          questionText: `${q.scenario}\n${q.question}`,
+          candidateAnswer: selectedOption,
+          complicationText: q.complicationText ?? null,
+          criticScore: 0,
+          observerSummary: res.evaluation?.observerSummary ?? '',
+        };
+        setArcSteps((prev) => [...prev, newStep]);
+      }
 
       // Update session state
       const updatedSession = {
