@@ -48,41 +48,36 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
 
 export function useAssessment() {
   const ctx = useContext(AssessmentContext);
-  if (!ctx) {
-    throw new Error('useAssessment must be used within AssessmentProvider');
-  }
+  if (!ctx) throw new Error('useAssessment must be used within AssessmentProvider');
   return ctx;
 }
 
 export function formatRole(role: Role): string {
-  switch (role) {
-    case 'data-analyst':
-      return 'Data Analyst';
-    case 'data-scientist':
-      return 'Data Scientist';
-    case 'backend-engineer':
-      return 'Backend Engineer';
-    case 'ml-engineer':
-      return 'ML Engineer';
-    case 'product-manager':
-      return 'Product Manager';
-    case 'cloud-engineer':
-      return 'Cloud Engineer';
-    default:
-      return role;
-  }
+  const map: Record<Role, string> = {
+    'data-analyst': 'Data Analyst',
+    'data-scientist': 'Data Scientist',
+    'backend-engineer': 'Backend Engineer',
+    'ml-engineer': 'ML Engineer',
+    'product-manager': 'Product Manager',
+    'cloud-engineer': 'Cloud Engineer',
+    'ai-ml-architect': 'AI/ML Architect',
+    'cloud-architect': 'Cloud Architect',
+    'devops-engineer': 'DevOps Engineer',
+    'cybersecurity-specialist': 'Cybersecurity Specialist',
+    'fullstack-developer': 'Full Stack Developer',
+    'big-data-engineer': 'Big Data Engineer',
+    'iot-architect': 'IoT Solutions Architect',
+    'blockchain-developer': 'Blockchain Developer',
+  };
+  return map[role] ?? role;
 }
 
 export function formatLevel(level: ExperienceLevel): string {
   switch (level) {
-    case 'beginner':
-      return 'Beginner';
-    case 'intermediate':
-      return 'Intermediate';
-    case 'senior':
-      return 'Senior';
-    default:
-      return level;
+    case 'beginner': return 'Beginner';
+    case 'intermediate': return 'Intermediate';
+    case 'senior': return 'Senior';
+    default: return level;
   }
 }
 

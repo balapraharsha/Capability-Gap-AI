@@ -4,6 +4,15 @@ export type Role =
   | 'backend-engineer'
   | 'ml-engineer'
   | 'product-manager'
+  | 'cloud-engineer'
+  | 'ai-ml-architect'
+  | 'cloud-architect'
+  | 'devops-engineer'
+  | 'cybersecurity-specialist'
+  | 'fullstack-developer'
+  | 'big-data-engineer'
+  | 'iot-architect'
+  | 'blockchain-developer'
   | 'cloud-engineer';
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'senior';
@@ -27,13 +36,10 @@ export interface Question {
   options: string[];
   difficulty?: 'easy' | 'medium' | 'hard';
   order: number;
-  /** Which step in the progressive scenario chain (0 = initial, 1 = follow-up, null = standalone) */
   chainStep?: number | null;
-  /** The complication twist text shown to the user before this question */
   complicationText?: string | null;
 }
 
-/** One completed step in a scenario chain, stored on the session */
 export interface ScenarioStep {
   stepIndex: number;
   type: 'initial' | 'complication' | 'follow_up';
@@ -45,7 +51,6 @@ export interface ScenarioStep {
   observerSummary: string;
 }
 
-/** The full chain state stored on the session */
 export interface ScenarioChain {
   rootScenario: string;
   chainCompetency: string;
@@ -53,6 +58,8 @@ export interface ScenarioChain {
   chainDepth: number;
   isActive: boolean;
   lastComplication?: string | null;
+  /** Which question number (1-indexed) this chain belongs to */
+  questionNumber?: number;
 }
 
 export interface AssessmentSession {
@@ -91,9 +98,7 @@ export interface AnswerResponse {
   confidenceScore: number;
   coverage: number;
   report?: CapabilityReport;
-  /** Complication twist narrative, present when a chain step was just triggered */
   complicationText?: string | null;
-  /** Which chain step the NEXT question is at */
   chainStep?: number | null;
   scenarioChain?: ScenarioChain | null;
 }

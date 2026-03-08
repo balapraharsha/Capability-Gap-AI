@@ -9,6 +9,7 @@ import {
   formatRole,
   formatLevel,
 } from '../context/AssessmentContext';
+} from '../../../../v2_all_changes/frontend/src/context/AssessmentContext';
 import type { Question, ScenarioStep } from '../types';
 
 // ─────────────────────────────────────────────────
@@ -30,7 +31,7 @@ function ScenarioArc({
   const nodes = [
     { label: 'Scenario', sub: rootScenario.slice(0, 72) + (rootScenario.length > 72 ? '…' : ''), done: true, active: currentStepIndex === 0 },
     ...steps.map((s, i) => ({
-      label: i === 0 ? 'Decision 1' : `Decision ${i + 1}`,
+      label: i === 0 ? 'Decision 1' : i === 1 ? 'Decision 2' : 'Final Decision',
       sub: s.candidateAnswer.slice(0, 60) + (s.candidateAnswer.length > 60 ? '…' : ''),
       done: true,
       active: false,
@@ -45,7 +46,7 @@ function ScenarioArc({
         }]
       : []),
     {
-      label: currentStepIndex === 0 ? 'Decision 1' : `Decision ${currentStepIndex + 1}`,
+      label: currentStepIndex === 0 ? 'Decision 1' : currentStepIndex === 1 ? 'Decision 2' : 'Final Decision',
       sub: 'Your next move…',
       done: false,
       active: true,
