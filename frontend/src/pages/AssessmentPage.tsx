@@ -9,7 +9,6 @@ import {
   formatRole,
   formatLevel,
 } from '../context/AssessmentContext';
-} from '../../../../v2_all_changes/frontend/src/context/AssessmentContext';
 import type { Question, ScenarioStep } from '../types';
 
 // ─────────────────────────────────────────────────
@@ -213,9 +212,9 @@ export function AssessmentPage() {
 
   const q = currentQuestion as Question;
   const chain = currentSession.scenarioChain;
+  const currentChainStep = q?.chainStep ?? null;
   // Only show arc sidebar when the CURRENT question is part of the chain
   const isInChain = currentChainStep !== null && currentChainStep !== undefined;
-  const currentChainStep = q?.chainStep ?? null;
 
   // ── Submit answer ────────────────────────────────
   async function handleSubmit(e: FormEvent) {
