@@ -293,10 +293,10 @@ export function ReportPage() {
 
       {/* Weak areas callout */}
       {weakSkills.length > 0 && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-3">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
           <div className="flex items-center gap-2">
             {Ico.alert}
-            <p className="text-sm font-bold text-red-800">Priority Improvement Areas</p>
+            <p className="text-sm font-bold text-orange-800">Priority Improvement Areas</p>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             {weakSkills.map(key => {
