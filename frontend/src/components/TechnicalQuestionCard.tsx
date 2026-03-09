@@ -265,6 +265,32 @@ export function TechnicalQuestionCard({
           />
         </div>
       )}
+
+      {/* Fallback text input — shown when question content failed to load (no code/diff/logs/options) */}
+      {!isFixTheCode && !hasOptions && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 flex-shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Question content is loading — please describe your approach based on the question type shown above.</span>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-stone-700">
+              {question.type === 'code_review'   ? 'What issues would you flag in a code review?' :
+               question.type === 'log_detective' ? 'What is the root cause and your fix?' :
+               question.type === 'debugging'     ? 'What is the bug and how would you fix it?' :
+               question.type === 'complexity'    ? 'What is the time complexity and how would you optimise it?' :
+               'Describe your approach:'}
+            </p>
+            <textarea
+              value={selectedOption}
+              onChange={(e) => onOptionSelect(e.target.value)}
+              placeholder="Type your answer here…"
+              disabled={submitting}
+              className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 resize-none min-h-[100px]"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
