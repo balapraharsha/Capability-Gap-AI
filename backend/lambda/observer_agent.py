@@ -125,4 +125,3 @@ def handler(event, _context):
   if event.get("httpMethod") == "POST":
     return handle_answer(event)
   return build_response(405, {"message": "Method not allowed"})
-

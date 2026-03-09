@@ -55,4 +55,3 @@ def handler(event, _context):
     "statusCode": 200,
     "body": json.dumps(result),
   }
-

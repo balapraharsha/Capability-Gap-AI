@@ -111,7 +111,7 @@ def invoke_bedrock_json(client, model_id, system_prompt, user_prompt):
             }
         ],
         inferenceConfig={
-            "maxTokens": 1024,
+            "maxTokens": 2048,
             "temperature": 0.3,
         },
     )

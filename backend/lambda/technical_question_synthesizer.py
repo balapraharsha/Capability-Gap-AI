@@ -256,9 +256,54 @@ def synthesize_technical_question(
         f"Generate a realistic {q_type.replace('_', ' ')} question tailored to this role."
     )
 
-    data = invoke_bedrock_json(client, BEDROCK_MODEL_ID, system_prompt, user_prompt)
+    try:
+        data = invoke_bedrock_json(client, BEDROCK_MODEL_ID, system_prompt, user_prompt)
+    except Exception as e:
+        print(f"[TECH_Q] Bedrock error for {q_type}: {e} — using mock")
+        data = {}
+
     if not isinstance(data, dict):
         data = {}
+
+    # ── Validate that required type-specific fields are present ──
+    # If Bedrock returned truncated/empty JSON, fall back to the mock question
+    # so the frontend always has real content to display.
+    needs_code = q_type in ("debugging", "fix_the_code", "complexity")
+    needs_diff = q_type == "code_review"
+    needs_logs = q_type == "log_detective"
+
+    def _str(val):
+        """Safely convert any Bedrock field to string — handles list/None/str."""
+        if val is None:       return ""
+        if isinstance(val, list): return "\n".join(str(v) for v in val)
+        return str(val)
+
+    # Normalize all fields so downstream code always gets strings
+    for field in ("code", "diff", "logs", "scenario", "task", "hint", "language"):
+        if field in data:
+            data[field] = _str(data[field])
+    if "options" in data and not isinstance(data["options"], list):
+        data["options"] = []
+
+    bedrock_missing_content = (
+        (needs_code and not data.get("code", "").strip()) or
+        (needs_diff and not data.get("diff", "").strip()) or
+        (needs_logs and not data.get("logs", "").strip()) or
+        not data.get("scenario", "").strip()
+    )
+
+    if bedrock_missing_content:
+        print(f"[TECH_Q] Bedrock response missing required fields for {q_type} — using mock")
+        mock = MOCK_QUESTIONS[q_type].copy()
+        mock["id"] = generate_question_id()
+        mock["questionId"] = mock["id"]
+        mock["type"] = q_type
+        mock["competency"] = _competency_for_type(q_type)
+        mock["difficulty"] = difficulty
+        mock["chainStep"] = None
+        mock["complicationText"] = None
+        mock["order"] = question_number - 1
+        return mock
 
     qid = generate_question_id()
     result = {

@@ -293,17 +293,17 @@ export function ReportPage() {
 
       {/* Weak areas callout */}
       {weakSkills.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            {Ico.alert}
-            <p className="text-sm font-bold text-orange-800">Priority Improvement Areas</p>
-          </div>
+        <div key={key} className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
+            <div className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center bg-orange-100 text-orange-700">
+              {cfg?.icon}
+              <p className="text-sm font-bold text-orange-700">Priority Improvement Areas</p>
+            </div>
           <div className="grid gap-2 md:grid-cols-2">
             {weakSkills.map(key => {
               const cfg = SKILL_CONFIG[key];
               const pctVal = Math.round((rawNine[key] ?? 0.5) * 100);
               return (
-                <div key={key} className={`flex items-start gap-3 rounded-lg border p-3 ${cfg?.bg ?? 'bg-orange-50'} ${cfg?.border ?? 'border-orange-200'}`}>
+                <div key={key} className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
                   <div className={`flex-shrink-0 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center ${cfg?.iconBg ?? 'bg-orange-100'} ${cfg?.iconColor ?? 'text-orange-700'}`}>{cfg?.icon}</div>
                   <div>
                     <p className="text-[12px] font-semibold text-slate-800">{cfg?.label ?? key}</p>
