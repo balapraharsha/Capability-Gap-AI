@@ -18,6 +18,26 @@ Main responsibilities of this page:
 7. Allow the user to start a new assessment or return to the home page.
 */
 
+/*
+ReportPage
+
+This page displays the final capability report after a user completes
+the adaptive technical assessment.
+
+The report visualizes the candidate's performance across 9 skill dimensions,
+generates an overall readiness score, and provides insights into strengths,
+weaknesses, and recommended learning paths.
+
+Main responsibilities of this page:
+1. Fetch the capability report for the completed assessment session.
+2. Display overall readiness using a radial gauge.
+3. Show detailed scores for the 9 evaluated skills.
+4. Visualize skills using a radar chart.
+5. Highlight strong skills and weak areas.
+6. Provide narrative feedback and improvement recommendations.
+7. Allow the user to start a new assessment or return to the home page.
+*/
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAssessment, formatRole, formatLevel } from '../context/AssessmentContext';
@@ -326,17 +346,14 @@ export function ReportPage() {
 
       {/* Weak areas callout */}
       {weakSkills.length > 0 && (
-        <div key={key} className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
-            <div className="flex-shrink-0 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center bg-orange-100 text-orange-700">
-              {cfg?.icon}
-              <p className="text-sm font-bold text-orange-700">Priority Improvement Areas</p>
-            </div>
+        <div className="space-y-3">
+          <p className="text-sm font-bold text-orange-700">Priority Improvement Areas</p>
           <div className="grid gap-2 md:grid-cols-2">
             {weakSkills.map(key => {
               const cfg = SKILL_CONFIG[key];
               const pctVal = Math.round((rawNine[key] ?? 0.5) * 100);
               return (
-                <div key={key} className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                <div key={key} className={`flex items-start gap-3 rounded-lg border p-3 ${cfg?.border ?? 'border-orange-200'} ${cfg?.bg ?? 'bg-orange-50'}`}>
                   <div className={`flex-shrink-0 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center ${cfg?.iconBg ?? 'bg-orange-100'} ${cfg?.iconColor ?? 'text-orange-700'}`}>{cfg?.icon}</div>
                   <div>
                     <p className="text-[12px] font-semibold text-slate-800">{cfg?.label ?? key}</p>
