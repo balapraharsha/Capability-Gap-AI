@@ -163,31 +163,31 @@ Capability-Gap-AI
 
 # Tech Stack
 
-Frontend
+## Frontend
 
-React
-TypeScript
-Vite
-TailwindCSS
-Axios
-Recharts
+* React
+* TypeScript
+* Vite
+* TailwindCSS
+* Axios
+* Recharts
 
-Backend
+## Backend
 
-Python
-AWS Lambda
-AWS SAM
+* Python
+* AWS Lambda
+* AWS SAM
 
-AI
+## AI
 
-AWS Bedrock
-Claude Models
+* AWS Bedrock
+* Claude Models
 
-Infrastructure
+## Infrastructure
 
-Serverless Architecture
-API Gateway
-Lambda Functions
+* Serverless Architecture
+* AWS API Gateway
+* AWS Lambda Functions
 
 ---
 
@@ -226,17 +226,6 @@ npm run dev
 
 ---
 
-# Example Output
-
-The generated report includes
-
-• Overall readiness score
-• Skill radar visualization
-• Weak area identification
-• Personalized learning recommendations
-
----
-
 # Hackathon Recognition
 
 This project was developed during the **AI for Bharat Hackathon** and was shortlisted for its innovative approach to **AI-driven technical capability assessment and adaptive interview simulation**.
@@ -269,3 +258,4 @@ This project was developed during the **AI for Bharat Hackathon** and was shortl
 ## 💖 Show Some Love
 Enjoying this project? Give it a **star** ⭐ on GitHub!  
 Contributions, suggestions, and forks are always welcome.
+
