@@ -1,112 +1,271 @@
-# Capability Gap AI
+# Capably AI — Adaptive Technical Capability Assessment Platform
 
-Capability Gap AI is an **adaptive AI interview simulator** that evaluates whether a candidate is ready for a specific technical role. It dynamically generates interview questions until competency coverage reaches 80% and confidence reaches 75%, then produces a detailed capability report.
+AI-powered platform that simulates real technical interview situations and evaluates a candidate’s **role readiness using adaptive AI scenarios and multi-agent evaluation**.
 
-## Architecture
+This project was built as part of the **AI for Bharat Hackathon**, where it was **shortlisted for its approach to AI-driven capability evaluation and adaptive interview simulation**.
 
-### Assessment Flow
+Unlike traditional quizzes, Capaby AI presents **realistic engineering problems** such as debugging code, fixing broken implementations, analyzing logs, and making decisions under pressure. Each answer is evaluated by AI agents to determine reasoning quality, technical accuracy, and communication clarity.
 
-1. User selects **Role** + **Experience Level**
-2. Assessment Engine loads **competency framework** for the role
-3. AI generates the **first question** dynamically
-4. User answers
-5. Evaluation Engine runs **Observer**, **Critic**, and **Guide** agents
-6. Competency Tracker updates scores
-7. If coverage ≥ 80% and confidence ≥ 75% → generate report and end
-8. Otherwise → AI generates **next question** targeting remaining competencies
-9. Repeat until stop condition
+The system then generates a **comprehensive capability report** highlighting strengths, weaknesses, and personalized learning recommendations.
 
-### Supported Roles & Competencies
+---
 
-| Role | Competencies |
-|------|--------------|
-| Data Analyst | technical_analysis, business_metrics, problem_solving, communication, adaptability, stakeholder_thinking |
-| Backend Engineer | system_design, scalability, debugging, tradeoff_reasoning, communication, ownership |
-| Data Scientist | technical_analysis, experimentation, problem_solving, communication, adaptability, stakeholder_thinking |
-| ML Engineer | system_design, model_serving, debugging, tradeoff_reasoning, communication, ownership |
-| Product Manager | product_thinking, business_metrics, prioritization, communication, stakeholder_thinking, adaptability |
-| Cloud Engineer | system_design, scalability, cost_optimization, tradeoff_reasoning, debugging, ownership |
+# Key Features
 
-### Question Types
+## Adaptive AI Assessment
 
-- `quiz`, `case_study`, `situation`, `communication_task`, `leadership_scenario`, `technical_reasoning`
+Questions dynamically adapt based on user responses, allowing the system to simulate real interview pressure and evaluate decision-making.
 
-### DynamoDB Tables
+## Scenario Chain Engine
 
-- **Users** – user metadata
-- **AssessmentSessions** – session state (tested/remaining competencies, confidence, coverage, current question)
-- **Answers** – per-answer evaluations (Observer, Critic, Guide outputs)
-- **Reports** – final capability reports
+Multi-step scenarios simulate real workplace incidents:
 
-## Project Structure
+Decision → Complication → Follow-up Decision → Escalation → Final Resolution
+
+Each step increases complexity and evaluates adaptability.
+
+## Multi-Agent AI Evaluation
+
+Each response is analyzed by three AI agents:
+
+Observer
+Summarizes reasoning and decision approach.
+
+Critic
+Evaluates technical depth, trade-offs, and correctness.
+
+Guide
+Provides improvement suggestions and deeper reflection prompts.
+
+## Six Technical Question Types
+
+1. Scenario Decision
+2. Debug the Code
+3. Fix the Code
+4. Code Review
+5. Log Detective
+6. Complexity Analysis
+
+## Nine Skill Dimensions Evaluated
+
+* Decision Making
+* Debugging Ability
+* Code Correctness
+* Code Quality
+* Incident Diagnosis
+* Algorithmic Thinking
+* Communication Clarity
+* Adaptability Under Pressure
+* Technical Depth
+
+## Capability Report
+
+After the assessment, the platform generates:
+
+* Overall readiness score
+* Radar chart of skill dimensions
+* Strength and weakness analysis
+* Priority improvement areas
+* Personalized learning recommendations
+
+---
+
+# System Architecture
+
+The system is composed of three major layers:
+
+Frontend (React + TypeScript)
+
+Handles UI rendering, scenario flow, and visualization of capability analytics.
+
+Backend (Python + AWS Lambda)
+
+Generates questions, manages scenario chains, evaluates responses, and generates reports.
+
+AI Layer (AWS Bedrock)
+
+Claude models power question generation and evaluation agents.
+
+---
+
+# Project Structure
 
 ```
-capability-gap-ai/
-├── frontend/          # React + TypeScript + Tailwind + Vite
-│   └── src/
-│       ├── components/
-│       ├── pages/     # Home, RoleSelection, Assessment, Evaluation, Dashboard, Report
-│       ├── context/
-│       ├── api.ts
-│       └── types.ts
-├── backend/
-│   └── lambda/
-│       ├── assessment_engine.py   # Main orchestration
-│       ├── competency_tracker.py  # Tracks coverage and confidence
-│       ├── topic_retriever.py     # Loads competency frameworks
-│       ├── question_synthesizer.py# Generates FAANG-style questions
-│       ├── observer_agent.py      # Extracts reasoning structure
-│       ├── critic_agent.py        # Detects reasoning flaws
-│       ├── guide_agent.py         # Socratic follow-up questions
-│       ├── report_generator.py    # Final capability report
-│       └── common.py
-└── infrastructure/
-    └── template.yaml  # AWS SAM
+Capability-Gap-AI
+│
+├── backend
+│   ├── lambda
+│   │   ├── assessment_engine.py
+│   │   ├── common.py
+│   │   ├── competency_tracker.py
+│   │   ├── critic_agent.py
+│   │   ├── guide_agent.py
+│   │   ├── observer_agent.py
+│   │   ├── question_synthesizer.py
+│   │   ├── report_generator.py
+│   │   ├── scenario_chain_synthesizer.py
+│   │   ├── technical_question_synthesizer.py
+│   │   └── topic_retriever.py
+│   │
+│   └── requirements.txt
+│
+├── frontend
+│   ├── src
+│   │   ├── components
+│   │   │   ├── Layout.tsx
+│   │   │   ├── TechnicalQuestionCard.tsx
+│   │   │   └── TimerBadge.tsx
+│   │   │
+│   │   ├── context
+│   │   │   └── AssessmentContext.tsx
+│   │   │
+│   │   ├── pages
+│   │   │   ├── AssessmentPage.tsx
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── EvaluationPage.tsx
+│   │   │   ├── HomePage.tsx
+│   │   │   ├── ReportPage.tsx
+│   │   │   └── RoleSelectionPage.tsx
+│   │   │
+│   │   ├── App.tsx
+│   │   ├── api.ts
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   └── types.ts
+│   │
+│   ├── .gitignore
+│   ├── index.html
+│   ├── package.json
+│   ├── postcss.config.cjs
+│   ├── tailwind.config.cjs
+│   ├── tsconfig.json
+│   └── vite.config.ts
+│
+├── infrastructure
+│   └── template.yaml
+│
+└── README.md
 ```
 
-## API
+---
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/assessment/start` | Start session, generate first question |
-| POST | `/assessment/{sessionId}/answer` | Evaluate answer, generate next question or report |
-| GET | `/assessment/{sessionId}/report` | Return final capability report |
-| GET | `/users/{userId}/assessments` | List user assessments |
+# Assessment Workflow
 
-## Getting Started
+1. User selects a target role and experience level
+2. Backend loads competency framework for the role
+3. AI generates an adaptive assessment
+4. User answers six progressively complex questions
+5. AI agents evaluate each response
+6. Skill scores are calculated across nine dimensions
+7. Final capability report is generated
 
-### Frontend
+---
 
-```bash
+# Tech Stack
+
+Frontend
+
+React
+TypeScript
+Vite
+TailwindCSS
+Axios
+Recharts
+
+Backend
+
+Python
+AWS Lambda
+AWS SAM
+
+AI
+
+AWS Bedrock
+Claude Models
+
+Infrastructure
+
+Serverless Architecture
+API Gateway
+Lambda Functions
+
+---
+
+# Running the Project
+
+Clone the repository
+
+```
+git clone https://github.com/yourusername/capaby-ai.git
+```
+
+Install frontend dependencies
+
+```
 cd frontend
 npm install
 ```
 
-Create `.env`:
+Create environment file
 
 ```
-VITE_API_BASE_URL=https://your-api-id.execute-api.region.amazonaws.com/prod
+.env
 ```
 
-```bash
+Add API endpoint
+
+```
+VITE_API_BASE_URL=http://localhost:3000
+```
+
+Start development server
+
+```
 npm run dev
 ```
 
-### Backend & Infrastructure
+---
 
-```bash
-cd infrastructure
-sam build
-sam deploy --guided
-```
+# Example Output
 
-- Ensure AWS CLI and SAM CLI are installed
-- Enable Amazon Bedrock access in your account
-- For local/mock evaluation, set `BEDROCK_MOCK=1` in Lambda environment
+The generated report includes
 
-### Deployment
+• Overall readiness score
+• Skill radar visualization
+• Weak area identification
+• Personalized learning recommendations
 
-1. Deploy SAM stack: `sam deploy --guided`
-2. Copy the `ApiUrl` output
-3. Set `VITE_API_BASE_URL` in frontend `.env`
-4. Build and serve: `cd frontend && npm run build`
+---
+
+# Hackathon Recognition
+
+This project was developed during the **AI for Bharat Hackathon** and was shortlisted for its innovative approach to **AI-driven technical capability assessment and adaptive interview simulation**.
+
+---
+
+# Future Improvements
+
+* Real-time coding execution environment
+* Interview simulation mode
+* AI-generated personalized practice questions
+* Team analytics dashboard for recruiters
+* Skill progression tracking across multiple assessments
+
+---
+
+# Author
+## 👨‍💻 Developed By
+
+**Bala Praharsha Mannepalli**  
+📧 [balapraharsha.m@gmail.com]  
+🔗 [LinkedIn](https://linkedin.com/in/mannepalli-bala-praharsha) | [GitHub](https://github.com/balapraharsha)  
+
+**Yasasswini Idimukkala**  
+📧 [yasasswini.idimukkala.8@gmail.com]  
+🔗 [LinkedIn](https://www.linkedin.com/in/idimukkala-yasasswini) | [GitHub](https://github.com/yasasswini08)
+
+---
+
+## 💖 Show Some Love
+Enjoying this project? Give it a **star** ⭐ on GitHub!  
+Contributions, suggestions, and forks are always welcome.
