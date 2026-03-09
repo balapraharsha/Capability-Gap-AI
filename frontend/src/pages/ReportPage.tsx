@@ -1,11 +1,37 @@
+/*
+ReportPage
+
+This page displays the final capability report after a user completes
+the adaptive technical assessment.
+
+The report visualizes the candidate's performance across 9 skill dimensions,
+generates an overall readiness score, and provides insights into strengths,
+weaknesses, and recommended learning paths.
+
+Main responsibilities of this page:
+1. Fetch the capability report for the completed assessment session.
+2. Display overall readiness using a radial gauge.
+3. Show detailed scores for the 9 evaluated skills.
+4. Visualize skills using a radar chart.
+5. Highlight strong skills and weak areas.
+6. Provide narrative feedback and improvement recommendations.
+7. Allow the user to start a new assessment or return to the home page.
+*/
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAssessment, formatRole, formatLevel } from '../context/AssessmentContext';
 import { fetchReport } from '../api';
 
-// ─────────────────────────────────────────────────
-// SVG icons
-// ─────────────────────────────────────────────────
+/*
+────────────────────────────────────────
+SVG Icons
+────────────────────────────────────────
+
+All icons used across the report page are defined here
+as inline SVG elements. This avoids external dependencies
+and ensures consistent styling across the UI.
+*/
 const Ico = {
   target:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
   bug:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4"><path d="M9 9h.01M15 9h.01"/><path d="M12 3C9.24 3 7 5.24 7 8v5c0 2.76 2.24 5 5 5s5-2.24 5-5V8c0-2.76-2.24-5-5-5z"/><path d="M7 10H3M21 10h-4M7 14H3M21 14h-4" strokeLinecap="round"/></svg>,
@@ -24,10 +50,17 @@ const Ico = {
   chart:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>,
 };
 
-// ─────────────────────────────────────────────────
-// Skill config — autumn/orange palette throughout
-// ─────────────────────────────────────────────────
+/*
+────────────────────────────────────────
+Skill Configuration
+────────────────────────────────────────
 
+Each skill dimension includes:
+- icon
+- display label
+- description
+- visual styling used in the UI
+*/
 const SKILL_CONFIG: Record<string, {
   icon: JSX.Element; label: string; description: string;
   bg: string; border: string; iconBg: string; iconColor: string;

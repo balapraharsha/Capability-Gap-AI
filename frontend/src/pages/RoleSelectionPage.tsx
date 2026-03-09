@@ -1,41 +1,121 @@
+/*
+RoleSelectionPage
+
+This page allows the user to choose:
+1. The target role they want to be assessed for.
+2. Their experience level.
+
+After selecting both, the page starts a new adaptive assessment session
+via the backend API and navigates the user to the assessment page.
+
+Main responsibilities:
+- Display 14 available roles grouped by category.
+- Allow searching roles by name or description.
+- Allow selecting experience level (Beginner / Intermediate / Senior).
+- Start a new assessment session using the selected configuration.
+*/
+
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { startAssessment } from '../api';
 import { useAssessment, formatRole, formatLevel } from '../context/AssessmentContext';
 import type { ExperienceLevel, Role } from '../types';
 
-// SVG category icons — no emojis
+
+/*
+────────────────────────────────────────
+SVG Icons
+────────────────────────────────────────
+
+All UI icons are implemented using inline SVGs instead of emojis.
+This keeps styling consistent with the rest of the design system.
+*/
+
 function IconData({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>;
-}
-function IconCode({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
-}
-function IconCloud({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>;
-}
-function IconBox({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>;
-}
-function IconSearch({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-}
-function IconCheck({ className = "w-4 h-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}><polyline points="20 6 9 17 4 12"/></svg>;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+      <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+    </svg>
+  );
 }
 
-type RoleEntry = { id: Role; label: string; description: string };
-type Category = { label: string; icon: JSX.Element; roles: RoleEntry[] };
+function IconCode({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
+    </svg>
+  );
+}
+
+function IconCloud({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+    </svg>
+  );
+}
+
+function IconBox({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    </svg>
+  );
+}
+
+function IconSearch({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  );
+}
+
+function IconCheck({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+}
+
+
+/*
+Role categories used to group the available assessment roles.
+Each category contains a list of roles with descriptions.
+*/
+
+type RoleEntry = {
+  id: Role;
+  label: string;
+  description: string;
+};
+
+type Category = {
+  label: string;
+  icon: JSX.Element;
+  roles: RoleEntry[];
+};
+
+
+/*
+Role catalog used in the UI.
+These map directly to roles supported by the assessment engine.
+*/
 
 const CATEGORIES: Category[] = [
   {
     label: 'Data & AI',
     icon: <IconData className="w-3.5 h-3.5" />,
     roles: [
-      { id: 'data-analyst',   label: 'Data Analyst',   description: 'SQL, dashboards, business metrics, and exploratory analysis.' },
-      { id: 'data-scientist', label: 'Data Scientist',  description: 'Modeling, experimentation, and product analytics.' },
-      { id: 'ml-engineer',    label: 'ML Engineer',     description: 'Serving models in production, monitoring, and scalability.' },
-      { id: 'ai-ml-architect',label: 'AI/ML Architect', description: 'Deep learning systems, model architecture, and AI infrastructure.' },
+      { id: 'data-analyst', label: 'Data Analyst', description: 'SQL, dashboards, business metrics, and exploratory analysis.' },
+      { id: 'data-scientist', label: 'Data Scientist', description: 'Modeling, experimentation, and product analytics.' },
+      { id: 'ml-engineer', label: 'ML Engineer', description: 'Serving models in production, monitoring, and scalability.' },
+      { id: 'ai-ml-architect', label: 'AI/ML Architect', description: 'Deep learning systems, model architecture, and AI infrastructure.' },
       { id: 'big-data-engineer', label: 'Big Data Engineer', description: 'Data pipelines and large-scale processing with Spark and Kafka.' },
     ],
   },
@@ -43,20 +123,20 @@ const CATEGORIES: Category[] = [
     label: 'Engineering',
     icon: <IconCode className="w-3.5 h-3.5" />,
     roles: [
-      { id: 'backend-engineer',    label: 'Backend Engineer',    description: 'APIs, distributed systems, databases, and reliability trade-offs.' },
+      { id: 'backend-engineer', label: 'Backend Engineer', description: 'APIs, distributed systems, databases, and reliability trade-offs.' },
       { id: 'fullstack-developer', label: 'Fullstack Developer', description: 'React, Node.js, REST APIs, and frontend-backend integration.' },
-      { id: 'blockchain-developer',label: 'Blockchain Developer',description: 'Smart contracts, Web3, and decentralised application design.' },
+      { id: 'blockchain-developer', label: 'Blockchain Developer', description: 'Smart contracts, Web3, and decentralised application design.' },
     ],
   },
   {
     label: 'Infrastructure & Security',
     icon: <IconCloud className="w-3.5 h-3.5" />,
     roles: [
-      { id: 'cloud-engineer',           label: 'Cloud Engineer',            description: 'Cloud architecture, cost, reliability, and infrastructure-as-code.' },
-      { id: 'cloud-architect',          label: 'Cloud Architect',           description: 'Multi-cloud design, cost optimisation, and governance.' },
-      { id: 'devops-engineer',          label: 'DevOps Engineer',           description: 'CI/CD pipelines, Docker, Kubernetes, and observability.' },
-      { id: 'cybersecurity-specialist', label: 'Cybersecurity Specialist',  description: 'Threat modelling, incident response, and security architecture.' },
-      { id: 'iot-architect',            label: 'IoT Architect',             description: 'Edge computing, MQTT, sensor networks, and firmware design.' },
+      { id: 'cloud-engineer', label: 'Cloud Engineer', description: 'Cloud architecture, cost, reliability, and infrastructure-as-code.' },
+      { id: 'cloud-architect', label: 'Cloud Architect', description: 'Multi-cloud design, cost optimisation, and governance.' },
+      { id: 'devops-engineer', label: 'DevOps Engineer', description: 'CI/CD pipelines, Docker, Kubernetes, and observability.' },
+      { id: 'cybersecurity-specialist', label: 'Cybersecurity Specialist', description: 'Threat modelling, incident response, and security architecture.' },
+      { id: 'iot-architect', label: 'IoT Architect', description: 'Edge computing, MQTT, sensor networks, and firmware design.' },
     ],
   },
   {
@@ -68,49 +148,109 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-const LEVELS: { id: ExperienceLevel; label: string; description: string; badge: string }[] = [
-  { id: 'beginner',     label: 'Beginner',     description: 'Starting out — understand what is expected.',    badge: 'Entry level' },
-  { id: 'intermediate', label: 'Intermediate', description: 'Some experience or internships, levelling up.',   badge: 'Mid level' },
-  { id: 'senior',       label: 'Senior',       description: 'Lead projects, stress-test system thinking.',     badge: 'Senior level' },
+
+/*
+Experience level options.
+
+These levels influence question difficulty and scenario complexity
+inside the adaptive assessment engine.
+*/
+
+const LEVELS = [
+  { id: 'beginner', label: 'Beginner', description: 'Starting out — understand what is expected.', badge: 'Entry level' },
+  { id: 'intermediate', label: 'Intermediate', description: 'Some experience or internships, levelling up.', badge: 'Mid level' },
+  { id: 'senior', label: 'Senior', description: 'Lead projects, stress-test system thinking.', badge: 'Senior level' },
 ];
 
+
+/*
+Main Role Selection Page
+*/
+
 export function RoleSelectionPage() {
+
   const navigate = useNavigate();
+
+  // Access global assessment context
   const { setSession } = useAssessment();
+
+  // Selected role and experience level
   const [selectedRole, setSelectedRole] = useState<Role>('backend-engineer');
   const [selectedLevel, setSelectedLevel] = useState<ExperienceLevel>('intermediate');
+
+  // Search query for filtering roles
   const [search, setSearch] = useState('');
+
+  // Loading + error state when starting assessment
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /*
+  Filter role categories based on the search query.
+  */
   const query = search.toLowerCase();
-  const filteredCats = CATEGORIES.map(cat => ({
-    ...cat,
-    roles: cat.roles.filter(r => !query || r.label.toLowerCase().includes(query) || r.description.toLowerCase().includes(query)),
-  })).filter(cat => cat.roles.length > 0);
 
-  const selectedRoleObj = CATEGORIES.flatMap(c => c.roles).find(r => r.id === selectedRole);
+  const filteredCats = CATEGORIES
+    .map(cat => ({
+      ...cat,
+      roles: cat.roles.filter(r =>
+        !query ||
+        r.label.toLowerCase().includes(query) ||
+        r.description.toLowerCase().includes(query)
+      ),
+    }))
+    .filter(cat => cat.roles.length > 0);
 
+
+  // Selected role object (used for footer summary)
+  const selectedRoleObj =
+    CATEGORIES.flatMap(c => c.roles).find(r => r.id === selectedRole);
+
+
+  /*
+  Start assessment handler.
+
+  Creates a new session via API, stores it in context,
+  then navigates the user to the assessment page.
+  */
   async function handleSubmit(e: FormEvent) {
+
     e.preventDefault();
+
     setError(null);
     setLoading(true);
+
     try {
-      const session = await startAssessment({ userId: 'demo-user', role: selectedRole, level: selectedLevel });
+
+      const session = await startAssessment({
+        userId: 'demo-user',
+        role: selectedRole,
+        level: selectedLevel,
+      });
+
       setSession(session);
+
       navigate('/assessment');
+
     } catch (err) {
+
       console.error(err);
+
       setError('Unable to start assessment. Please check the API and try again.');
+
     } finally {
+
       setLoading(false);
+
     }
+
   }
 
   return (
+    /* Main form layout */
     <form onSubmit={handleSubmit} className="space-y-6 max-w-5xl">
 
-      {/* Header */}
+      {/* Page header */}
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Select your target role</h2>
         <p className="text-xs text-slate-500 mt-1">14 roles across Data, Engineering, Infrastructure & Product. Each assessment runs 6 tailored questions.</p>

@@ -1,29 +1,39 @@
 """
-Assessment Engine v5 — Bulletproof flow
-=========================================
+Assessment Engine
 
-Slot  questionCount  type
-----  -------------  ----
-Q1         1         scenario_chain  (3 decisions + 2 complications)
-Q2         2         debugging
-Q3         3         fix_the_code
-Q4         4         code_review
-Q5         5         log_detective
-Q6         6         complexity
-→ Report
+This module manages the full lifecycle of an AI-based assessment session.
+It is responsible for starting an assessment, processing candidate answers,
+evaluating responses using AI agents, and controlling the flow of questions.
 
-Key rules:
-- questionCount (1-6) is the SINGLE source of truth for which slot we're on.
-- Chain is active ONLY when current_slot==1 AND chainDepth < 3 AND isActive==True.
-- All other slots generate technical questions unconditionally.
-- No local questionCount increment on frontend — always trust server value.
+The engine follows a structured question sequence consisting of six slots.
+The first slot begins with a scenario-based question that may continue as a
+multi-step scenario chain. Once the chain is complete, the engine moves
+through several technical question types such as debugging, code fixing,
+code review, log analysis, and complexity evaluation.
+
+Key responsibilities of this module include:
+- Creating and managing assessment sessions.
+- Generating the first scenario-based question.
+- Handling scenario chains with follow-up complications.
+- Processing answers and calculating response time.
+- Running evaluation agents (observer, critic, and guide).
+- Updating competency tracking and assessment progress.
+- Generating technical questions for later slots.
+- Completing the assessment and producing the final report.
+
+The engine uses DynamoDB for storing sessions and answers, and relies on
+multiple supporting modules for question synthesis, competency tracking,
+AI evaluation, and report generation.
+
+This file acts as the central controller that coordinates the entire
+assessment workflow.
 """
 
 import json
 import traceback
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from common import (
     _iso_now, build_response, decimal_to_native,
@@ -36,14 +46,15 @@ from observer_agent import run_observer
 from critic_agent import run_critic
 from guide_agent import run_guide
 from report_generator import generate_report_for_session
-from scenario_chain_synthesizer import advance_chain, init_chain, is_chain_active
+from scenario_chain_synthesizer import advance_chain, init_chain
 from technical_question_synthesizer import synthesize_technical_question
 
+# Total number of questions in one assessment session
 TOTAL_QUESTIONS = 6
 
-# Which display slot → question type
+# Mapping between question slot and question type
 SLOT_TYPE = {
-    1: "scenario",      # handled by question_synthesizer + chain
+    1: "scenario",
     2: "debugging",
     3: "fix_the_code",
     4: "code_review",
@@ -52,263 +63,307 @@ SLOT_TYPE = {
 }
 
 
-# ── helpers ──────────────────────────────────────────────────────
-
 def _f2d(obj):
-    """Recursively convert floats to Decimal for DynamoDB."""
-    if isinstance(obj, float):   return Decimal(str(obj))
-    if isinstance(obj, dict):    return {k: _f2d(v) for k, v in obj.items()}
-    if isinstance(obj, list):    return [_f2d(v) for v in obj]
+    """
+    DynamoDB does not accept Python floats directly.
+    This helper converts all floats in nested structures into Decimal.
+    """
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _f2d(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_f2d(v) for v in obj]
     return obj
 
 
 def _critic_to_score(critic: Dict) -> float:
+    """
+    Convert critic metrics into a normalized competency score.
+    The score is scaled to a value between 0 and 1.
+    """
     m = critic.get("metrics", {})
-    keys = ["analyticalThinking","problemSolving","communication","ownership","adaptability","decisionMaking"]
+    keys = [
+        "analyticalThinking",
+        "problemSolving",
+        "communication",
+        "ownership",
+        "adaptability",
+        "decisionMaking",
+    ]
+
     vals = [float(v) for k in keys if (v := m.get(k)) is not None]
-    return round(max(0.0, min(1.0, sum(vals)/len(vals)/5.0)), 3) if vals else 0.5
+
+    if not vals:
+        return 0.5
+
+    return round(max(0.0, min(1.0, sum(vals) / len(vals) / 5.0)), 3)
 
 
 def _make_technical_q(slot: int, role: str, level: str) -> Dict:
-    """Generate a technical question for the given slot (2-6)."""
+    """
+    Generate a technical question for slots 2–6.
+    """
     q = synthesize_technical_question(question_number=slot, role=role, level=level)
-    q["questionId"]       = q.get("questionId") or q.get("id") or generate_question_id()
-    q["chainStep"]        = None
+
+    q["questionId"] = q.get("questionId") or q.get("id") or generate_question_id()
+    q["chainStep"] = None
     q["complicationText"] = None
-    q["order"]            = slot - 1
+    q["order"] = slot - 1
+
     return q
 
 
 def _chain_is_active_and_incomplete(chain: Optional[Dict]) -> bool:
-    """True only when chain should still receive answers (depth < 3 AND isActive)."""
+    """
+    Check if the scenario chain is still active and has remaining steps.
+    """
     if not chain:
         return False
-    depth  = int(chain.get("chainDepth", 0))
+
+    depth = int(chain.get("chainDepth", 0))
     active = bool(chain.get("isActive", False))
+
     return active and depth < 3
 
 
-# ── start_assessment ─────────────────────────────────────────────
-
 def start_assessment(user_id: str, role: str, level: str) -> Dict:
-    sessions_table = get_table("ASSESSMENT_SESSIONS_TABLE")
-    session_id     = generate_session_id()
-    tracker        = init_tracker(role)
-    competency     = get_next_competency(tracker)
+    """
+    Initialize a new assessment session.
 
-    # Q1: scenario question
+    The first question is always a scenario-based question that starts
+    the scenario chain.
+    """
+    sessions_table = get_table("ASSESSMENT_SESSIONS_TABLE")
+    session_id = generate_session_id()
+
+    tracker = init_tracker(role)
+    competency = get_next_competency(tracker)
+
     q = synthesize_next_question(
-        role=role, level=level,
+        role=role,
+        level=level,
         target_competency=competency,
         remaining_competencies=tracker["remaining"],
         previous_answers=[],
     )
-    q["questionId"]       = q.get("id") or generate_question_id()
-    q["chainStep"]        = 0
-    q["complicationText"] = None
-    q["order"]            = 0
 
-    chain = init_chain(root_scenario=q.get("scenario",""), competency=competency, question_number=1)
+    q["questionId"] = q.get("id") or generate_question_id()
+    q["chainStep"] = 0
+    q["complicationText"] = None
+    q["order"] = 0
+
+    chain = init_chain(
+        root_scenario=q.get("scenario", ""),
+        competency=competency,
+        question_number=1,
+    )
 
     item = _f2d({
-        "sessionId":              session_id,
-        "userId":                 user_id,
-        "role":                   role,
-        "level":                  level,
-        "status":                 "in-progress",
-        "testedCompetencies":     tracker["tested"],
-        "remainingCompetencies":  tracker["remaining"],
-        "confidenceScore":        tracker["confidence"],
-        "coverage":               tracker["coverage"],
-        "currentQuestion":        q,
-        "questionCount":          1,   # current display number (1-6)
-        "scenarioChain":          chain,
-        "createdAt":              _iso_now(),
+        "sessionId": session_id,
+        "userId": user_id,
+        "role": role,
+        "level": level,
+        "status": "in-progress",
+        "testedCompetencies": tracker["tested"],
+        "remainingCompetencies": tracker["remaining"],
+        "confidenceScore": tracker["confidence"],
+        "coverage": tracker["coverage"],
+        "currentQuestion": q,
+        "questionCount": 1,
+        "scenarioChain": chain,
+        "createdAt": _iso_now(),
     })
+
     sessions_table.put_item(Item=item)
 
-    print(f"[ENGINE] Session {session_id} started — role={role} level={level} Q1 chainStep=0")
-
     return {
-        "sessionId":     session_id,
-        "status":        "in-progress",
+        "sessionId": session_id,
+        "status": "in-progress",
         "currentQuestion": q,
         "questionCount": 1,
         "confidenceScore": tracker["confidence"],
-        "coverage":      tracker["coverage"],
+        "coverage": tracker["coverage"],
         "scenarioChain": chain,
     }
 
 
-# ── process_answer ───────────────────────────────────────────────
-
-def process_answer(session_id: str, question_id: str, answer: str,
-                   started_at: str, ended_at: str) -> Dict:
+def process_answer(session_id: str, question_id: str, answer: str, started_at: str, ended_at: str) -> Dict:
+    """
+    Process the user's answer, evaluate it using AI agents,
+    update competency tracking, and determine the next question.
+    """
 
     sessions_table = get_table("ASSESSMENT_SESSIONS_TABLE")
-    answers_table  = get_table("ANSWERS_TABLE")
+    answers_table = get_table("ANSWERS_TABLE")
 
-    raw     = sessions_table.get_item(Key={"sessionId": session_id})
+    raw = sessions_table.get_item(Key={"sessionId": session_id})
     session = raw.get("Item")
+
     if not session:
         return {"error": "Session not found", "statusCode": 404}
-    session = decimal_to_native(session)
 
+    session = decimal_to_native(session)
     current_q = session.get("currentQuestion", {})
+
     if current_q.get("questionId") != question_id:
         return {"error": "Question mismatch", "statusCode": 400}
 
-    # Build question text for agents
-    parts = [current_q.get("scenario",""), current_q.get("question",""),
-             current_q.get("task","")]
-    if current_q.get("code"):  parts.append(f"Code:\n{current_q['code']}")
-    if current_q.get("logs"):  parts.append(f"Logs:\n{current_q['logs']}")
-    if current_q.get("diff"):  parts.append(f"Diff:\n{current_q['diff']}")
-    q_text     = "\n".join(p for p in parts if p)
+    # Construct full question text for evaluation agents
+    parts = [
+        current_q.get("scenario", ""),
+        current_q.get("question", ""),
+        current_q.get("task", ""),
+    ]
+
+    if current_q.get("code"):
+        parts.append(f"Code:\n{current_q['code']}")
+
+    if current_q.get("logs"):
+        parts.append(f"Logs:\n{current_q['logs']}")
+
+    if current_q.get("diff"):
+        parts.append(f"Diff:\n{current_q['diff']}")
+
+    q_text = "\n".join(p for p in parts if p)
     competency = current_q.get("competency", "problem_solving")
 
-    # Timing
-    s_ts     = datetime.fromisoformat(started_at.replace("Z","+00:00"))
-    e_ts     = datetime.fromisoformat(ended_at.replace("Z","+00:00"))
+    # Calculate response time
+    s_ts = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+    e_ts = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
     resp_sec = max(1.0, (e_ts - s_ts).total_seconds())
 
-    # AI evaluation
-    observer   = run_observer(q_text, f"Answer: {answer}")
-    critic     = run_critic(q_text, f"Answer: {answer}", observer)
-    guide      = run_guide(q_text, f"Answer: {answer}", observer, critic)
+    # Run evaluation agents
+    observer = run_observer(q_text, f"Answer: {answer}")
+    critic = run_critic(q_text, f"Answer: {answer}", observer)
+    guide = run_guide(q_text, f"Answer: {answer}", observer, critic)
+
     comp_score = _critic_to_score(critic)
 
     evaluation = {
-        "observerSummary": observer.get("summary",""),
-        "criticFeedback":  critic.get("feedback",""),
-        "guidePrompt":     guide.get("prompt",""),
+        "observerSummary": observer.get("summary", ""),
+        "criticFeedback": critic.get("feedback", ""),
+        "guidePrompt": guide.get("prompt", ""),
     }
 
-    # Store answer
+    # Store answer in the answers table
     answers_table.put_item(Item=_f2d({
-        "sessionId":       session_id,
-        "questionId":      question_id,
-        "question":        current_q,
-        "answer":          answer,
-        "competency":      competency,
+        "sessionId": session_id,
+        "questionId": question_id,
+        "question": current_q,
+        "answer": answer,
+        "competency": competency,
         "competencyScore": comp_score,
-        "observer":        observer,
-        "critic":          critic,
-        "guide":           guide,
+        "observer": observer,
+        "critic": critic,
+        "guide": guide,
         "responseTimeSec": resp_sec,
-        "createdAt":       _iso_now(),
+        "createdAt": _iso_now(),
     }))
 
-    # Update competency tracker
+    # Rebuild tracker from session state
     tracker = {
-        "tested":    session.get("testedCompetencies", []),
+        "tested": session.get("testedCompetencies", []),
         "remaining": session.get("remainingCompetencies", []),
-        "scores":    {},
-        "coverage":  float(session.get("coverage", 0)),
-        "confidence":float(session.get("confidenceScore", 0)),
+        "scores": {},
+        "coverage": float(session.get("coverage", 0)),
+        "confidence": float(session.get("confidenceScore", 0)),
     }
+
     tracker = tracker_update(tracker, competency, comp_score)
 
-    # ── DETERMINE CURRENT SLOT ───────────────────────────────────
-    current_slot = int(session.get("questionCount", 1))   # 1-6
-    chain        = session.get("scenarioChain")
-    chain_step   = current_q.get("chainStep")
-
-    print(f"[ENGINE] Slot={current_slot} chainStep={chain_step} "
-          f"chainDepth={chain.get('chainDepth') if chain else 'N/A'} "
-          f"isActive={chain.get('isActive') if chain else 'N/A'}")
+    current_slot = int(session.get("questionCount", 1))
+    chain = session.get("scenarioChain")
+    chain_step = current_q.get("chainStep")
 
     completed_step = {
-        "stepIndex":       chain_step if chain_step is not None else 0,
-        "type":            "initial" if chain_step == 0 else "follow_up",
-        "questionId":      question_id,
-        "questionText":    q_text[:200],
+        "stepIndex": chain_step if chain_step is not None else 0,
+        "type": "initial" if chain_step == 0 else "follow_up",
+        "questionId": question_id,
+        "questionText": q_text[:200],
         "candidateAnswer": answer[:200],
-        "complicationText":current_q.get("complicationText"),
-        "criticScore":     comp_score,
-        "observerSummary": observer.get("summary",""),
+        "complicationText": current_q.get("complicationText"),
+        "criticScore": comp_score,
+        "observerSummary": observer.get("summary", ""),
     }
 
-    # ── SCENARIO CHAIN (Q1 only, while depth < 3) ────────────────
+    # Handle scenario chain logic for the first slot
     if current_slot == 1 and _chain_is_active_and_incomplete(chain):
-        print(f"[ENGINE] Chain active — advancing (depth was {chain.get('chainDepth',0)})")
-        result    = advance_chain(session=session, completed_step=completed_step)
+
+        result = advance_chain(session=session, completed_step=completed_step)
         upd_chain = result["updatedChain"]
         chain_done = result["chainComplete"]
 
         if not chain_done:
-            # More chain steps — stay on slot 1
+
             next_q = result["nextQuestion"]
-            compl  = result["complicationText"]
+            compl = result["complicationText"]
+
             sessions_table.update_item(
                 Key={"sessionId": session_id},
-                UpdateExpression="SET testedCompetencies=:t, remainingCompetencies=:r, "
-                                 "currentQuestion=:q, scenarioChain=:sc",
+                UpdateExpression="SET testedCompetencies=:t, remainingCompetencies=:r, currentQuestion=:q, scenarioChain=:sc",
                 ExpressionAttributeValues=_f2d({
-                    ":t": tracker["tested"], ":r": tracker["remaining"],
-                    ":q": next_q, ":sc": upd_chain,
+                    ":t": tracker["tested"],
+                    ":r": tracker["remaining"],
+                    ":q": next_q,
+                    ":sc": upd_chain,
                 }),
             )
-            print(f"[ENGINE] Chain continuing → chainStep={next_q.get('chainStep')} complication={bool(compl)}")
+
             return {
-                "status":              "in-progress",
-                "nextQuestion":        next_q,
-                "complicationText":    compl,
-                "chainStep":           next_q.get("chainStep"),
-                "scenarioChain":       upd_chain,
-                "testedCompetencies":  tracker["tested"],
+                "status": "in-progress",
+                "nextQuestion": next_q,
+                "complicationText": compl,
+                "chainStep": next_q.get("chainStep"),
+                "scenarioChain": upd_chain,
+                "testedCompetencies": tracker["tested"],
                 "remainingCompetencies": tracker["remaining"],
-                "confidenceScore":     tracker["confidence"],
-                "coverage":            tracker["coverage"],
-                "questionCount":       1,
-                "evaluation":          evaluation,
+                "confidenceScore": tracker["confidence"],
+                "coverage": tracker["coverage"],
+                "questionCount": 1,
+                "evaluation": evaluation,
             }
 
-        # Chain complete — advance to slot 2
-        print(f"[ENGINE] Chain COMPLETE (depth={upd_chain.get('chainDepth')}) → advancing to slot 2")
-        next_slot            = 2
+        next_slot = 2
         upd_chain["isActive"] = False
 
     else:
-        # Technical question or post-chain — advance slot normally
-        next_slot  = current_slot + 1
-        upd_chain  = chain or {}
+        next_slot = current_slot + 1
+        upd_chain = chain or {}
+
         if upd_chain:
             upd_chain = {**upd_chain, "isActive": False}
-        print(f"[ENGINE] Slot {current_slot} done → next_slot={next_slot}")
 
-    # ── ASSESSMENT COMPLETE ───────────────────────────────────────
+    # If all questions are finished, generate the final report
     if next_slot > TOTAL_QUESTIONS:
-        print(f"[ENGINE] All {TOTAL_QUESTIONS} slots complete → generating report")
+
         report = generate_report_for_session(session_id)
+
         sessions_table.update_item(
             Key={"sessionId": session_id},
             UpdateExpression="SET #s=:s",
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues={":s": "completed"},
         )
+
         return {
-            "status":    "completed",
+            "status": "completed",
             "evaluation": evaluation,
             "complicationText": None,
             "chainStep": None,
-            "testedCompetencies":  tracker["tested"],
+            "testedCompetencies": tracker["tested"],
             "remainingCompetencies": tracker["remaining"],
             "confidenceScore": tracker["confidence"],
-            "coverage":  tracker["coverage"],
+            "coverage": tracker["coverage"],
             "questionCount": current_slot,
-            "report":    report,
+            "report": report,
         }
 
-    # ── GENERATE NEXT QUESTION ────────────────────────────────────
-    slot_type = SLOT_TYPE.get(next_slot, "debugging")
-    print(f"[ENGINE] Generating slot {next_slot} ({slot_type})")
-
+    # Generate next technical question
     nq = _make_technical_q(next_slot, session["role"], session["level"])
-    print(f"[ENGINE] Generated qId={nq.get('questionId')} type={nq.get('type')}")
 
     progress = (next_slot - 1) / TOTAL_QUESTIONS
-    conf     = min(1.0, progress + 0.1)
+    conf = min(1.0, progress + 0.1)
 
     sessions_table.update_item(
         Key={"sessionId": session_id},
@@ -318,38 +373,38 @@ def process_answer(session_id: str, question_id: str, answer: str,
             "scenarioChain=:sc, coverage=:cov, confidenceScore=:conf"
         ),
         ExpressionAttributeValues=_f2d({
-            ":t":    tracker["tested"],
-            ":r":    tracker["remaining"],
-            ":q":    nq,
-            ":qc":   next_slot,
-            ":sc":   upd_chain,
-            ":cov":  progress,
+            ":t": tracker["tested"],
+            ":r": tracker["remaining"],
+            ":q": nq,
+            ":qc": next_slot,
+            ":sc": upd_chain,
+            ":cov": progress,
             ":conf": conf,
         }),
     )
 
     return {
-        "status":              "in-progress",
-        "nextQuestion":        nq,
-        "complicationText":    None,
-        "chainStep":           None,
-        "scenarioChain":       upd_chain,
-        "testedCompetencies":  tracker["tested"],
+        "status": "in-progress",
+        "nextQuestion": nq,
+        "complicationText": None,
+        "chainStep": None,
+        "scenarioChain": upd_chain,
+        "testedCompetencies": tracker["tested"],
         "remainingCompetencies": tracker["remaining"],
-        "confidenceScore":     conf,
-        "coverage":            progress,
-        "questionCount":       next_slot,
-        "evaluation":          evaluation,
+        "confidenceScore": conf,
+        "coverage": progress,
+        "questionCount": next_slot,
+        "evaluation": evaluation,
     }
 
 
-# ── Lambda handler ────────────────────────────────────────────────
-
 def lambda_handler(event, context):
+    """
+    AWS Lambda entry point that routes API requests.
+    """
     try:
-        print("EVENT:", json.dumps(event)[:500])
         method = event.get("requestContext", {}).get("http", {}).get("method", "")
-        path   = event.get("rawPath", "")
+        path = event.get("rawPath", "")
         params = event.get("pathParameters") or {}
 
         if method == "OPTIONS":
@@ -357,36 +412,60 @@ def lambda_handler(event, context):
 
         if method == "POST" and "/assessment/start" in path:
             body = parse_body(event)
-            return build_response(200, start_assessment(
-                body.get("userId"), body.get("role"), body.get("level")))
+            return build_response(
+                200,
+                start_assessment(body.get("userId"), body.get("role"), body.get("level"))
+            )
 
         if method == "POST" and "/answer" in path:
             body = parse_body(event)
-            sid  = params.get("sessionId")
-            qid  = body.get("questionId")
+            sid = params.get("sessionId")
+            qid = body.get("questionId")
+
             if not sid or not qid:
                 return build_response(400, {"message": "Missing sessionId or questionId"})
+
             result = process_answer(
-                sid, qid, body.get("answer"),
-                body.get("startedAtIso"), body.get("endedAtIso"))
+                sid,
+                qid,
+                body.get("answer"),
+                body.get("startedAtIso"),
+                body.get("endedAtIso"),
+            )
+
             return build_response(200, result)
 
         if method == "GET" and "/report" in path:
             sid = params.get("sessionId")
+
             if not sid:
                 return build_response(400, {"message": "sessionId required"})
+
             return build_response(200, generate_report_for_session(sid))
 
         if method == "GET" and "/users/" in path and "/assessments" in path:
+
             parts = path.strip("/").split("/")
-            try:   uid = parts[parts.index("users") + 1]
-            except: uid = None
+
+            try:
+                uid = parts[parts.index("users") + 1]
+            except:
+                uid = None
+
             if not uid:
                 return build_response(400, {"message": "userId required"})
-            tbl  = get_table("ASSESSMENT_SESSIONS_TABLE")
-            resp = tbl.scan(FilterExpression="userId = :uid",
-                           ExpressionAttributeValues={":uid": uid})
-            return build_response(200, [decimal_to_native(i) for i in resp.get("Items", [])])
+
+            tbl = get_table("ASSESSMENT_SESSIONS_TABLE")
+
+            resp = tbl.scan(
+                FilterExpression="userId = :uid",
+                ExpressionAttributeValues={":uid": uid},
+            )
+
+            return build_response(
+                200,
+                [decimal_to_native(i) for i in resp.get("Items", [])],
+            )
 
         return build_response(405, {"message": "Method not allowed"})
 

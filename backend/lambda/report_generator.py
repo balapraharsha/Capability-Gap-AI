@@ -1,43 +1,72 @@
 """
-Report Generator v3
----------------------
-Produces a final capability report with 9 distinct skill dimensions:
+Report Generator
 
-  1. Decision Making          – scenario chain performance
-  2. Debugging Ability        – Q2 debugging question
-  3. Code Correctness         – Q3 fix-the-code question
-  4. Code Quality             – Q4 code review question
-  5. Incident Diagnosis       – Q5 log detective question
-  6. Algorithmic Thinking     – Q6 complexity question
-  7. Communication Clarity    – observer summaries across all questions
-  8. Adaptability Under Pressure – time pressure + complication handling
-  9. Technical Depth          – critic scores aggregated across all questions
+This module produces the final capability report for an assessment session.
+
+The report evaluates the candidate across nine core skill dimensions that
+represent different aspects of engineering and decision-making ability.
+These dimensions combine results from scenario questions, technical tasks,
+observer analysis, critic scoring, and response timing.
+
+Nine evaluated skill dimensions:
+
+1. Decision Making
+   Performance in scenario-based decision questions and trade-off reasoning.
+
+2. Debugging Ability
+   Ability to identify and reason about bugs in code.
+
+3. Code Correctness
+   Skill at writing or fixing code that behaves correctly across cases.
+
+4. Code Quality
+   Awareness of maintainability, security, and best practices during reviews.
+
+5. Incident Diagnosis
+   Ability to interpret logs and trace production issues.
+
+6. Algorithmic Thinking
+   Understanding of algorithm complexity and optimisation trade-offs.
+
+7. Communication Clarity
+   Ability to clearly explain reasoning and thought process.
+
+8. Adaptability Under Pressure
+   Performance when unexpected complications are introduced.
+
+9. Technical Depth
+   Overall technical capability inferred from critic scoring.
+
+The report generator aggregates scores from all questions, calculates
+overall readiness, identifies strengths and capability gaps, and optionally
+uses an AI model to produce a narrative summary and learning recommendations.
 """
 
 from typing import Any, Dict, List
 from common import _iso_now, build_response, decimal_to_native, get_bedrock_client, get_table, invoke_bedrock_json
 
+# Bedrock model used to generate narrative feedback
 BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
-# Maps competency names to the 9 canonical skill dimensions
+
+# Map raw competencies from questions to the standardized nine skill dimensions
 COMPETENCY_TO_SKILL = {
-    # Decision making (scenario chain)
     "decision_making":       "decision_making",
     "problem_solving":       "decision_making",
     "prioritization":        "decision_making",
     "adaptability":          "adaptability_under_pressure",
     "leadership":            "decision_making",
-    # Technical skills
+
     "debugging":             "debugging_ability",
     "code_correctness":      "code_correctness",
     "code_quality":          "code_quality",
     "incident_diagnosis":    "incident_diagnosis",
     "algorithmic_thinking":  "algorithmic_thinking",
-    # Soft skills
+
     "communication":         "communication_clarity",
     "stakeholder_thinking":  "communication_clarity",
+
     "ownership":             "technical_depth",
-    # Catch-all technical
     "technical_analysis":    "technical_depth",
     "technical_expertise":   "technical_depth",
     "system_design":         "technical_depth",
@@ -50,6 +79,8 @@ COMPETENCY_TO_SKILL = {
     "cost_optimization":     "algorithmic_thinking",
 }
 
+
+# The nine standardized skills used for final reporting
 NINE_SKILLS = [
     "decision_making",
     "debugging_ability",
@@ -62,27 +93,33 @@ NINE_SKILLS = [
     "technical_depth",
 ]
 
+
+# Metadata describing each skill dimension
 SKILL_META = {
-    "decision_making":            {"label": "Decision Making",           "description": "Ability to make sound decisions under constraints and ambiguity"},
-    "debugging_ability":          {"label": "Debugging Ability",         "description": "Skill at identifying bugs and reasoning about code correctness"},
-    "code_correctness":           {"label": "Code Correctness",          "description": "Ability to write and fix code that handles all cases correctly"},
-    "code_quality":               {"label": "Code Quality",              "description": "Awareness of best practices, security, and maintainability in code reviews"},
-    "incident_diagnosis":         {"label": "Incident Diagnosis",        "description": "Ability to trace root causes from logs, errors, and stack traces"},
-    "algorithmic_thinking":       {"label": "Algorithmic Thinking",      "description": "Understanding of complexity, optimisation, and algorithmic trade-offs"},
-    "communication_clarity":      {"label": "Communication Clarity",     "description": "Ability to articulate reasoning clearly and concisely"},
-    "adaptability_under_pressure":{"label": "Adaptability Under Pressure","description": "Performance when conditions change or complications are introduced"},
-    "technical_depth":            {"label": "Technical Depth",           "description": "Breadth and depth of domain-specific technical knowledge"},
+    "decision_making": {"label": "Decision Making", "description": "Ability to make sound decisions under constraints and ambiguity"},
+    "debugging_ability": {"label": "Debugging Ability", "description": "Skill at identifying bugs and reasoning about code correctness"},
+    "code_correctness": {"label": "Code Correctness", "description": "Ability to write and fix code that handles all cases correctly"},
+    "code_quality": {"label": "Code Quality", "description": "Awareness of best practices, security, and maintainability in code reviews"},
+    "incident_diagnosis": {"label": "Incident Diagnosis", "description": "Ability to trace root causes from logs and stack traces"},
+    "algorithmic_thinking": {"label": "Algorithmic Thinking", "description": "Understanding of complexity and algorithm trade-offs"},
+    "communication_clarity": {"label": "Communication Clarity", "description": "Ability to articulate reasoning clearly"},
+    "adaptability_under_pressure": {"label": "Adaptability Under Pressure", "description": "Performance when complications arise"},
+    "technical_depth": {"label": "Technical Depth", "description": "Breadth and depth of technical knowledge"},
 }
 
+
+# Score ranges mapped to performance labels
 SCORE_LABELS = {
-    (0.0, 0.4):  ("Needs Work",   "Critical gaps identified in this area"),
-    (0.4, 0.6):  ("Developing",   "Some foundational skills present but inconsistent"),
-    (0.6, 0.75): ("Competent",    "Solid understanding with room to grow"),
-    (0.75, 0.88):("Proficient",   "Strong performance with minor gaps"),
-    (0.88, 1.01):("Expert",       "Exceptional capability demonstrated"),
+    (0.0, 0.4): ("Needs Work", "Critical gaps identified in this area"),
+    (0.4, 0.6): ("Developing", "Some foundational skills present but inconsistent"),
+    (0.6, 0.75): ("Competent", "Solid understanding with room to grow"),
+    (0.75, 0.88): ("Proficient", "Strong performance with minor gaps"),
+    (0.88, 1.01): ("Expert", "Exceptional capability demonstrated"),
 }
+
 
 def get_score_label(score: float):
+    """Return a performance label based on a normalized score."""
     for (lo, hi), (label, desc) in SCORE_LABELS.items():
         if lo <= score < hi:
             return label, desc
@@ -90,21 +127,25 @@ def get_score_label(score: float):
 
 
 def _map_answers_to_nine_skills(answers: List[Dict[str, Any]]) -> Dict[str, List[float]]:
-    """Aggregate answer scores into the 9 skill buckets."""
+    """
+    Convert answer-level competency scores into skill buckets
+    corresponding to the nine skill dimensions.
+    """
     buckets: Dict[str, List[float]] = {skill: [] for skill in NINE_SKILLS}
 
     for a in answers:
         comp = a.get("competency", "")
         score = float(a.get("competencyScore", 0.5))
+
         skill = COMPETENCY_TO_SKILL.get(comp, "technical_depth")
         buckets[skill].append(score)
 
-        # Adaptability bonus: if the question had a complication, measure response time penalty
+        # If a scenario complication occurred, treat it as adaptability pressure
         q = a.get("question", {})
         if q.get("complicationText") or q.get("chainStep") is not None:
             buckets["adaptability_under_pressure"].append(score)
 
-        # Communication: use observer quality as proxy
+        # Observer score approximates communication clarity
         obs = a.get("observer", {})
         obs_score = obs.get("score")
         if obs_score is not None:
@@ -114,7 +155,10 @@ def _map_answers_to_nine_skills(answers: List[Dict[str, Any]]) -> Dict[str, List
 
 
 def _compute_nine_skills(buckets: Dict[str, List[float]]) -> Dict[str, float]:
-    """Average each bucket. Unscored skills default to 0.5 (neutral)."""
+    """
+    Compute the average score for each skill dimension.
+    Skills with no data default to a neutral score of 0.5.
+    """
     result = {}
     for skill in NINE_SKILLS:
         vals = buckets.get(skill, [])
@@ -123,78 +167,85 @@ def _compute_nine_skills(buckets: Dict[str, List[float]]) -> Dict[str, float]:
 
 
 def generate_report_for_session(session_id: str) -> Dict[str, Any]:
+    """
+    Build the final capability report for a completed assessment session.
+    """
+
     sessions_table = get_table("ASSESSMENT_SESSIONS_TABLE")
     answers_table = get_table("ANSWERS_TABLE")
 
+    # Load session information
     session_resp = sessions_table.get_item(Key={"sessionId": session_id})
     session = session_resp.get("Item")
     if not session:
         raise ValueError("Session not found")
+
     session = decimal_to_native(session)
 
+    # Load all answers associated with this session
     answers_resp = answers_table.query(
         KeyConditionExpression="sessionId = :sid",
         ExpressionAttributeValues={":sid": session_id},
     )
-    answers: List[Dict[str, Any]] = [decimal_to_native(a) for a in answers_resp.get("Items", [])]
 
-    # ── 9-skill scoring ──────────────────────────────
+    answers: List[Dict[str, Any]] = [
+        decimal_to_native(a) for a in answers_resp.get("Items", [])
+    ]
+
+    # Compute skill scores
     buckets = _map_answers_to_nine_skills(answers)
     nine_skill_scores = _compute_nine_skills(buckets)
 
-    # Also keep legacy competency scores for backwards compat
-    legacy_scores: Dict[str, List[float]] = {}
-    for a in answers:
-        comp = a.get("competency")
-        sc = float(a.get("competencyScore", 0))
-        if comp:
-            legacy_scores.setdefault(comp, []).append(sc)
-    competency_scores = {c: sum(v) / len(v) for c, v in legacy_scores.items()}
-
+    # Calculate overall readiness score
     overall = sum(nine_skill_scores.values()) / len(nine_skill_scores)
     overall_pct = round(overall * 100)
 
-    avg_response_time_sec = sum(float(a.get("responseTimeSec") or 0) for a in answers) / max(len(answers), 1)
+    # Calculate average response time
+    avg_response_time_sec = sum(
+        float(a.get("responseTimeSec") or 0) for a in answers
+    ) / max(len(answers), 1)
 
-    # Weak areas: skills below 0.65
+    # Identify strengths and weaknesses
     weak_skills = [s for s, v in nine_skill_scores.items() if v < 0.65]
     strong_skills = [s for s, v in nine_skill_scores.items() if v >= 0.75]
 
-    # ── AI-generated narrative ───────────────────────
+    # Generate narrative summary using Bedrock (optional)
     client = get_bedrock_client()
+
     if client is None:
         strengths = [SKILL_META[s]["label"] for s in strong_skills] or ["Demonstrated structured reasoning"]
         weaknesses = [SKILL_META[s]["label"] for s in weak_skills] or ["Needs further assessment"]
-        learning_recs = [f"Practice {SKILL_META[s]['label'].lower()}" for s in weak_skills] or ["Continue practising role-specific scenarios"]
+        learning_recs = [f"Practice {SKILL_META[s]['label'].lower()}" for s in weak_skills]
         narrative_summary = f"Assessment complete. Overall readiness: {overall_pct}%."
+
     else:
         system_prompt = (
             "You generate a precise capability gap report for a technical interview platform. "
-            "Return ONLY valid JSON with keys: "
-            "strengths (list of 2-3 strings), "
-            "weaknesses (list of 2-3 strings), "
-            "learningRecommendations (list of 3-4 specific resource/action strings), "
-            "narrativeSummary (1-2 sentence executive summary of the candidate's profile)."
+            "Return ONLY valid JSON with strengths, weaknesses, learningRecommendations, and narrativeSummary."
         )
+
         user_prompt = (
             f"Role: {session['role']}, Level: {session['level']}\n"
-            f"9 Skill scores (0-1): {nine_skill_scores}\n"
-            f"Weak skills (< 0.65): {[SKILL_META[s]['label'] for s in weak_skills]}\n"
-            f"Strong skills (>= 0.75): {[SKILL_META[s]['label'] for s in strong_skills]}\n"
-            f"Overall readiness: {overall_pct}%\n"
-            "Generate strengths, weaknesses, learning recommendations, and a narrative summary."
+            f"9 Skill scores: {nine_skill_scores}\n"
+            f"Weak skills: {[SKILL_META[s]['label'] for s in weak_skills]}\n"
+            f"Strong skills: {[SKILL_META[s]['label'] for s in strong_skills]}\n"
+            f"Overall readiness: {overall_pct}%"
         )
-        data = invoke_bedrock_json(client, BEDROCK_MODEL_ID, system_prompt, user_prompt)
-        strengths = data.get("strengths") or [SKILL_META[s]["label"] for s in strong_skills] or ["Demonstrated structured reasoning"]
-        weaknesses = data.get("weaknesses") or [SKILL_META[s]["label"] for s in weak_skills] or ["Needs further assessment"]
-        learning_recs = data.get("learningRecommendations") or [f"Practice {SKILL_META[s]['label'].lower()}" for s in weak_skills]
-        narrative_summary = data.get("narrativeSummary") or f"Assessment complete. Overall readiness: {overall_pct}%."
 
-    # ── Enrich skill scores with labels ─────────────
+        data = invoke_bedrock_json(client, BEDROCK_MODEL_ID, system_prompt, user_prompt)
+
+        strengths = data.get("strengths", [])
+        weaknesses = data.get("weaknesses", [])
+        learning_recs = data.get("learningRecommendations", [])
+        narrative_summary = data.get("narrativeSummary", "")
+
+    # Build enriched skill objects
     enriched_skills = {}
+
     for skill, score in nine_skill_scores.items():
         label, desc = get_score_label(score)
         meta = SKILL_META.get(skill, {})
+
         enriched_skills[skill] = {
             "score": score,
             "pct": round(score * 100),
@@ -212,74 +263,17 @@ def generate_report_for_session(session_id: str) -> Dict[str, Any]:
         "level": session["level"],
         "overallReadiness": overall_pct,
         "narrativeSummary": narrative_summary,
-        # New 9-skill breakdown
         "nineSkills": enriched_skills,
         "nineSkillScores": nine_skill_scores,
         "weakSkills": weak_skills,
         "strongSkills": strong_skills,
-        # Legacy fields for backwards compat
-        "competencyScores": competency_scores,
         "strengths": strengths,
         "weaknesses": weaknesses,
-        "weakAreas": weak_skills,
         "learningRecommendations": learning_recs,
-        "recommendedLearning": learning_recs,
         "timeAnalysis": {
             "averageResponseTimeMinutes": round(avg_response_time_sec / 60.0, 1),
         },
         "generatedAt": _iso_now(),
     }
 
-    # Optionally persist
-    import os
-    scores_table_name = os.getenv("COMPETENCY_SCORES_TABLE")
-    if scores_table_name:
-        try:
-            from decimal import Decimal
-            def _f2d(obj):
-                if isinstance(obj, float): return Decimal(str(obj))
-                if isinstance(obj, dict): return {k: _f2d(v) for k, v in obj.items()}
-                if isinstance(obj, list): return [_f2d(v) for v in obj]
-                return obj
-            scores_table = get_table("COMPETENCY_SCORES_TABLE")
-            scores_table.put_item(Item=_f2d({
-                "sessionId": session_id,
-                "competency": "overall",
-                "scores": nine_skill_scores,
-                "overallReadiness": overall_pct,
-                "generatedAt": _iso_now(),
-            }))
-        except Exception as e:
-            print(f"Warning: Could not save to scores table: {e}")
-
     return report
-
-
-def handler(event, _context):
-    if event.get("httpMethod") == "OPTIONS":
-        return build_response(200, {"message": "ok"})
-    http_method = event.get("httpMethod")
-    path = event.get("resource") or ""
-    path_params = event.get("pathParameters") or {}
-
-    if http_method == "GET" and "report" in path:
-        session_id = path_params.get("sessionId")
-        if not session_id:
-            return build_response(400, {"message": "sessionId is required"})
-        try:
-            return build_response(200, generate_report_for_session(session_id))
-        except ValueError as e:
-            return build_response(404, {"message": str(e)})
-
-    if http_method == "GET" and "assessments" in path:
-        user_id = path_params.get("userId")
-        if not user_id:
-            return build_response(400, {"message": "userId is required"})
-        sessions_table = get_table("ASSESSMENT_SESSIONS_TABLE")
-        resp = sessions_table.scan(
-            FilterExpression="userId = :uid",
-            ExpressionAttributeValues={":uid": user_id},
-        )
-        return build_response(200, resp.get("Items", []))
-
-    return build_response(405, {"message": "Method not allowed"})

@@ -1,39 +1,110 @@
+/*
+Global Tailwind Styles
+
+This file defines the global UI styles for the Capably AI frontend.
+
+Responsibilities:
+1. Import Tailwind base styles.
+2. Define shared UI components (glass panels, buttons).
+3. Set the global page theme and typography.
+4. Add small UI animations for smoother interactions.
+*/
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+
+/*
+Global page styling.
+
+Sets:
+- background color for the entire application
+- default text color
+- default font family
+*/
 body {
   @apply bg-amber-50 text-slate-900 font-sans;
 }
 
+
+/*
+Glass Panel
+
+Reusable UI container used across the app for cards and panels.
+
+Features:
+- subtle translucent background
+- soft amber border
+- drop shadow
+- rounded corners
+- blur effect
+- hover elevation animation
+*/
 .glass-panel {
   @apply bg-amber-50/90 border border-amber-200 shadow-lg shadow-amber-200/60 rounded-2xl backdrop-blur-md transition-transform transition-shadow duration-200;
 }
 
+
+/*
+Hover effect for glass panels.
+
+Adds slight lift and stronger shadow to improve depth perception.
+*/
 .glass-panel:hover {
   @apply -translate-y-0.5 shadow-xl;
 }
 
+
+/*
+Primary Button
+
+Main call-to-action button used across the platform.
+Examples:
+- Start Assessment
+- Submit Answer
+- Continue
+*/
 .primary-btn {
   @apply inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-amber-50 shadow-sm hover:bg-orange-500 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50 transition-all duration-200;
 }
 
+
+/*
+Secondary Button
+
+Used for less critical actions such as navigation or viewing results.
+Styled with a lighter background and border.
+*/
 .secondary-btn {
   @apply inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-amber-100 hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50 transition-all duration-200;
 }
 
+
+/*
+Question Card Animation
+
+Used when new questions appear during the assessment flow.
+Provides a subtle fade and slide effect to make the UI feel smoother.
+*/
 .question-card {
   animation: fade-slide-in 260ms ease-out;
 }
 
+
+/*
+Fade + slide animation used for question transitions.
+*/
 @keyframes fade-slide-in {
+
   from {
     opacity: 0;
     transform: translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
-}
 
+}

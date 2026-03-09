@@ -1,6 +1,39 @@
+/*
+HomePage
+
+This is the landing page for the Capably AI platform.
+
+Purpose of this page:
+1. Introduce the platform and its purpose (adaptive technical assessment).
+2. Show the 6-question assessment structure.
+3. Explain the 9 skill dimensions that are evaluated.
+4. Explain the multi-agent AI evaluation system.
+5. List supported technical roles.
+6. Provide entry points to:
+   - Start a new assessment
+   - View past assessment results
+
+Sections included:
+- Hero section with platform overview
+- 6-question assessment format
+- Skill dimensions panel
+- AI evaluation explanation
+- What the user receives after assessment
+- Supported roles list
+*/
+
 import { Link } from 'react-router-dom';
 
-// Inline SVG icons — no emojis
+
+/*
+────────────────────────────────────────
+Inline SVG Icons
+────────────────────────────────────────
+
+All icons are implemented using inline SVG instead of emojis
+to maintain consistent styling and visual clarity.
+*/
+
 function IconBrain({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
@@ -9,21 +42,27 @@ function IconBrain({ className = "w-5 h-5" }: { className?: string }) {
     </svg>
   );
 }
+
 function IconCode({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
-      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
     </svg>
   );
 }
+
 function IconChart({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
-      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-      <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
     </svg>
   );
 }
+
 function IconShield({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
@@ -31,6 +70,7 @@ function IconShield({ className = "w-5 h-5" }: { className?: string }) {
     </svg>
   );
 }
+
 function IconBug({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
@@ -40,6 +80,7 @@ function IconBug({ className = "w-5 h-5" }: { className?: string }) {
     </svg>
   );
 }
+
 function IconLayers({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
@@ -49,13 +90,17 @@ function IconLayers({ className = "w-5 h-5" }: { className?: string }) {
     </svg>
   );
 }
+
 function IconTarget({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
-      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="6"/>
+      <circle cx="12" cy="12" r="2"/>
     </svg>
   );
 }
+
 function IconCheck({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
@@ -63,14 +108,20 @@ function IconCheck({ className = "w-4 h-4" }: { className?: string }) {
     </svg>
   );
 }
+
 function IconArrow({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+      <polyline points="12 5 19 12 12 19"/>
     </svg>
   );
 }
 
+
+/*
+Supported technical roles that the assessment platform can evaluate.
+*/
 const ROLES = [
   "Data Analyst", "Data Scientist", "Backend Engineer", "ML Engineer",
   "Product Manager", "Cloud Engineer", "AI/ML Architect", "Cloud Architect",
@@ -78,6 +129,11 @@ const ROLES = [
   "Big Data Engineer", "IoT Architect", "Blockchain Developer",
 ];
 
+
+/*
+Question types included in the 6-question adaptive assessment.
+Each question type targets a different engineering skill.
+*/
 const QUESTION_TYPES = [
   { icon: <IconTarget className="w-4 h-4" />, label: "Scenario Chain", desc: "Progressive decisions with real complications" },
   { icon: <IconBug className="w-4 h-4" />, label: "Debug the Code", desc: "Spot bugs in realistic code snippets" },
@@ -87,17 +143,37 @@ const QUESTION_TYPES = [
   { icon: <IconChart className="w-4 h-4" />, label: "Complexity Analysis", desc: "Analyse Big-O and optimise algorithms" },
 ];
 
+
+/*
+Nine skill dimensions evaluated during the assessment.
+Each dimension contributes to the final capability report.
+*/
 const NINE_SKILLS = [
-  "Decision Making", "Debugging Ability", "Code Correctness",
-  "Code Quality", "Incident Diagnosis", "Algorithmic Thinking",
-  "Communication Clarity", "Adaptability Under Pressure", "Technical Depth",
+  "Decision Making",
+  "Debugging Ability",
+  "Code Correctness",
+  "Code Quality",
+  "Incident Diagnosis",
+  "Algorithmic Thinking",
+  "Communication Clarity",
+  "Adaptability Under Pressure",
+  "Technical Depth",
 ];
 
+
+/*
+Main HomePage component
+
+Acts as the platform's landing page and overview of the
+Capably AI adaptive technical assessment.
+*/
 export function HomePage() {
+
   return (
+
     <div className="space-y-10">
 
-      {/* ── Hero ─────────────────────────────────────────── */}
+      {/* Hero Section: Introduces the platform and main CTA */}
       <div className="grid gap-6 md:grid-cols-[1fr_340px]">
         <div className="glass-panel p-8 space-y-5">
           <div>
